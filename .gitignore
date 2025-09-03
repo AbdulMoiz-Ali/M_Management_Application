@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+dist/
+release/
+
+# env files
+*.env
+electron/.env
+
+# build outputs
+*.exe
+*.dll
+*.pak
+*.yml
+*.asar
+
+# misc
+.DS_Store
+Thumbs.db
