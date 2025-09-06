@@ -2943,7 +2943,7 @@ function createWindow() {
 
     // Load app
     // if (process.env.NODE_ENV === 'development') {
-    if (true) {
+    if (false) {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {
