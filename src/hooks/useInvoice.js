@@ -87,10 +87,10 @@ export function useInvoice() {
     };
 
 
-    const downloadInvoice = async (invoiceData) => {
+    const downloadInvoice = async (invoiceData, type) => {
         try {
             setError(null);
-            const result = await invoiceStorage.downloadInvoice(invoiceData);
+            const result = await invoiceStorage.downloadInvoice(invoiceData, type);
             if (result.success) {
                 return { success: true, data: result.data };
             } else {
@@ -103,10 +103,10 @@ export function useInvoice() {
         }
     };
 
-    const printInvoice = async (invoiceData) => {
+    const printInvoice = async (invoiceData, type) => {
         try {
             setError(null);
-            const result = await invoiceStorage.printInvoice(invoiceData);
+            const result = await invoiceStorage.printInvoice(invoiceData, type);
 
             if (result.success) {
                 return { success: true, data: result.data };

@@ -3,6 +3,7 @@ import { useProduct } from "../hooks/useProduct";
 import { Search, Plus, Edit2, Trash2, Package, AlertTriangle, DollarSign, TrendingUp, Filter, X, Save, BarChart2, Download } from 'lucide-react';
 import Pagination from "../components/Pagination";
 import LoadingDemo from "../components/LoadingDemo";
+import useConfirmDialog from "../components/ConfirmationDialog";
 
 const ProductManagement = () => {
     // Using custom hook
@@ -16,6 +17,7 @@ const ProductManagement = () => {
         exportProducts,
         clearError,
     } = useProduct();
+    const { showConfirm, ConfirmDialog } = useConfirmDialog();
 
     // Local state
     const [filteredProducts, setFilteredProducts] = useState([]);
@@ -146,7 +148,15 @@ const ProductManagement = () => {
     };
 
     const handleDelete = async (product) => {
-        if (window.confirm(`Are you sure you want to delete ${product?.name}?`)) {
+        const confirmed = await showConfirm({
+            title: "Delete Product",
+            message: `Are you sure you want to delete ${product?.name}?`,
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            type: "danger"
+        });
+
+        if (confirmed) {
             const result = await deleteProduct(product?.id);
             showAlert(result?.success ? 'Product deleted successfully!' : result?.error, result?.success ? 'success' : 'error');
         }
@@ -623,6 +633,7 @@ const ProductManagement = () => {
                     </div>
                 </div>
             )}
+            <ConfirmDialog />
         </div>
     )
 }

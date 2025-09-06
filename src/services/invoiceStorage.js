@@ -179,9 +179,9 @@ class InvoiceStorage {
         }
     }
 
-    async downloadInvoice(invoiceData) {
+    async downloadInvoice(invoiceData, type) {
         try {
-            const result = await window.electronAPI.downloadInvoice(invoiceData);
+            const result = await window.electronAPI.downloadInvoice(invoiceData, type);
             if (result.success) {
                 return { success: true, data: result.data };
             }
@@ -192,9 +192,9 @@ class InvoiceStorage {
         }
     }
 
-    async printInvoice(invoiceData) {
+    async printInvoice(invoiceData, type) {
         try {
-            const result = await window.electronAPI.printInvoice(invoiceData);
+            const result = await window.electronAPI.printInvoice(invoiceData, type);
             if (result.success) {
                 return { success: true, data: result.data };
             }

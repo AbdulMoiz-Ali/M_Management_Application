@@ -3,83 +3,74 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import {
     Search, Plus, Trash2, Calculator, FileText, User, Package, Eye, Download,
     Printer, Save, X, Edit, Filter, Calendar, DollarSign, Users, Receipt,
-    ArrowLeft, ExternalLink
+    ArrowLeft, ExternalLink, ShoppingCart, Truck
 } from 'lucide-react';
-import { useCustomer } from '../hooks/useCustomer';
 import { useProduct } from '../hooks/useProduct';
-import { useInvoice } from '../hooks/useInvoice';
-import { useAuth } from '../hooks/useAuth';
+import { usePurchaseInvoice } from '../hooks/usePurchaseInvoice';
 import SmartPrintInvoice from '../components/SmartPrintInvoice';
+import { useAuth } from '../hooks/useAuth';
 import Pagination from '../components/Pagination';
 import LoadingDemo from '../components/LoadingDemo';
 import useConfirmDialog from '../components/ConfirmationDialog';
 
-const InvoiceManagement = () => {
-    const {
-        customers,
-        updateCustomerBalance
-    } = useCustomer();
-    const { products } = useProduct();
+const PurchaseInvoice = () => {
+    const { products, updateProductStock } = useProduct();
 
     const { user } = useAuth();
-
-    const { showConfirm, ConfirmDialog } = useConfirmDialog();
 
     const setting = user || {
         martName: "MAKKAH CONFECTIONERY SUKKUR",
         shopAddress: "Sukkur",
         shopContactPhone: ["03042187313", "03003187980"],
-        saleBy: ["izhar udin mamon"],
-        suppliers: ["Sukkur ware house supplyer"],
+        receivedBy: ["izhar udin mamon", "store manager"],
+        purchaseFrom: ["Sukkur warehouse supplier", "Karachi distributor"],
     }
 
-    // Using all hook functionalities
+    // Using all purchase hook functionalities
     const {
-        allinvoice,
+        allPurchaseInvoices,
         loading,
         error,
-        loadInvoices,
-        saveInvoice,
-        deleteInvoice,
-        getInvoice,
-        searchInvoices,
-        exportInvoices,
-        updateInvoice,
+        loadPurchaseInvoices,
+        savePurchaseInvoice,
+        deletePurchaseInvoice,
+        getPurchaseInvoice,
+        searchPurchaseInvoices,
+        exportPurchaseInvoices,
+        updatePurchaseInvoice,
         clearError,
-        downloadInvoice,
-        printInvoice,
-        updateInvoiceStatus,
-        setSelectedInvoice: setHookSelectedInvoice
-    } = useInvoice();
+        updatePurchaseInvoiceStatus,
+        setSelectedPurchaseInvoice: setHookSelectedPurchaseInvoice
+    } = usePurchaseInvoice();
+
+    const { showConfirm, ConfirmDialog } = useConfirmDialog();
 
     useEffect(() => {
-        loadInvoices?.();
-    }, [loadInvoices]);
+        loadPurchaseInvoices?.();
+    }, [loadPurchaseInvoices]);
 
     const [currentView, setCurrentView] = useState('dashboard');
 
-    const handleExportInvoices = async () => {
-        const result = await exportInvoices?.();
+    const handleExportPurchaseInvoices = async () => {
+        const result = await exportPurchaseInvoices?.();
         if (result?.success) {
-            showAlert(`Invoices exported successfully to: ${result?.path}`, 'success');
+            showAlert(`Purchase invoices exported successfully to: ${result?.path}`, 'success');
         } else {
             showAlert(`Export failed: ${result?.error}`, 'error');
         }
     };
 
-    const [selectedInvoice, setSelectedInvoice] = useState(null);
+    const [selectedPurchaseInvoice, setSelectedPurchaseInvoice] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [isEditing, setIsEditing] = useState(false);
     const [editingInvoiceId, setEditingInvoiceId] = useState(null);
-    // Invoice creation states
+    // Purchase invoice creation states
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [showProductDropdown, setShowProductDropdown] = useState({});
     const [selectedProduct, setSelectedProduct] = useState([]);
     const [discountAmount, setDiscountAmount] = useState(0);
-    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState(null);
-    const [filteredCustomers, setFilteredCustomers] = useState([]);
+    const [selectedSupplier, setSelectedSupplier] = useState(null);
     const [editingStatus, setEditingStatus] = useState(null);
     const [alert, setAlert] = useState({ show: false, message: '', type: '' });
 
@@ -92,32 +83,22 @@ const InvoiceManagement = () => {
         setTimeout(() => setAlert({ show: false, message: '', type: '' }), 3000);
     };
 
-    const updateCustomerPreviousBalance = async (customerId, invoiceTotal) => {
-        try {
-            const updateResult = await updateCustomerBalance?.(customerId, invoiceTotal);
-
-            if (updateResult?.success) {
-                setTimeout(() => {
-                    showAlert(`Customer balance updated`, 'success');
-                }, 2000);
-
-            }
-        } catch (error) {
-            console.error('Error updating customer balance:', error);
-        }
-    };
-
     const handleStatusChange = async (invoiceId, newStatus) => {
         try {
-            const result = await updateInvoiceStatus?.(invoiceId, newStatus);
+            const result = await updatePurchaseInvoiceStatus?.(invoiceId, newStatus);
             showAlert(result?.success ? `Status updated to ${newStatus}` : result?.error, result?.success ? 'success' : 'error');
             setEditingStatus(null);
-            if (newStatus === 'paid') {
-                const invoice = result?.data;
-                const customerId = invoice?.customer?.id;
-                const invoiceTotal = invoice?.customer?.previousBalance || 0;
 
-                await updateCustomerPreviousBalance(customerId, invoiceTotal);
+            if (newStatus === 'received') {
+                const invoice = result?.data;
+                const invoiceTotal = invoice?.total || 0;
+
+                // Update product stock when purchase is received
+                invoice?.items?.forEach(async (item) => {
+                    if (item?.productId) {
+                        await updateProductStock?.(item?.productId, item?.quantity, 'add');
+                    }
+                });
             }
         } catch (error) {
             showAlert('Failed to update status', "error")
@@ -127,16 +108,12 @@ const InvoiceManagement = () => {
     // Updated form default values
     const { register, control, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm({
         defaultValues: {
-            invoiceNumber: `INV-${Date?.now()}`,
+            purchaseInvoiceNumber: `PUR-${Date?.now()}`,
             date: new Date()?.toISOString()?.split('T')[0],
-            customerSearch: '',
-            customerName: '',
-            customerPhone: '',
-            customerAddress: '',
-            customerCity: '',
+            supplierName: '',
+            supplierPhone: '',
+            supplierAddress: '',
             previousBalance: 0,
-            salesBy: '',
-            supplier: '',
             items: [{
                 productSearch: '',
                 productName: '',
@@ -162,7 +139,7 @@ const InvoiceManagement = () => {
 
     const handleSearch = async () => {
         if (searchTerm?.trim()) {
-            const result = await searchInvoices?.(searchTerm);
+            const result = await searchPurchaseInvoices?.(searchTerm);
             if (result?.success) {
                 // console.log('Search results:', result?.data);
             }
@@ -170,7 +147,6 @@ const InvoiceManagement = () => {
     };
 
     const watchedItems = watch("items");
-    const customerSearch = watch("customer");
 
     // Filter products based on search
     const handleProductSearch = (value, index) => {
@@ -190,9 +166,9 @@ const InvoiceManagement = () => {
         setValue(`items.${index}.productName`, product?.name);
         setValue(`items.${index}.productId`, product?.id);
 
-        // Set default rate based on unit type
+        // Set default rate based on unit type (for purchase, you might have different rates)
         const currentUnit = getValues(`items.${index}.unit`) || 'MASTER';
-        const rate = currentUnit === 'MASTER' ? product?.pricePerMaster : product?.pricePerBox;
+        const rate = currentUnit === 'MASTER' ? product?.purchasePricePerMaster || product?.pricePerMaster : product?.purchasePricePerBox || product?.pricePerBox;
         setValue(`items.${index}.rate`, rate);
 
         // Store product data for later use
@@ -206,22 +182,6 @@ const InvoiceManagement = () => {
         setShowProductDropdown({ ...showProductDropdown, [index]: false });
     };
 
-    const selectCustomer = (customer) => {
-        setSelectedCustomer(customer);
-
-        // Form values set کریں
-        setValue('customerName', customer?.name);
-        setValue('customerPhone', customer?.phone);
-        setValue('customerAddress', customer?.address);
-        setValue('customerCity', customer?.city);
-        setValue('previousBalance', customer?.previousBalance);
-        setValue('customerSearch', customer?.name);
-
-        // Dropdown hide کریں
-        setShowCustomerDropdown(false);
-        setFilteredCustomers([]);
-    };
-
     const calculateAmount = (index) => {
         const items = getValues("items");
         const quantity = items?.[index]?.quantity || 0;
@@ -233,11 +193,11 @@ const InvoiceManagement = () => {
             let rate = 0;
 
             if (unit === 'MASTER') {
-                rate = selectedProductForItem?.pricePerMaster;
+                rate = selectedProductForItem?.purchasePricePerMaster || selectedProductForItem?.pricePerMaster;
             } else if (unit === 'BOX') {
-                rate = selectedProductForItem?.pricePerBox;
+                rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
             } else if (unit === 'HALF') {
-                rate = selectedProductForItem?.pricePerBox;
+                rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
                 const halfBoxes = (selectedProductForItem?.boxesPerMaster || 24) / 2;
                 const amount = rate * halfBoxes;
                 setValue(`items.${index}.amount`, amount);
@@ -285,7 +245,7 @@ const InvoiceManagement = () => {
         };
     };
 
-    const { subTotal, discount, invoiceTotal, previousBalance, total, totalQuantity } = calculateTotals();
+    const { subTotal, discount, previousBalance, total, totalQuantity } = calculateTotals();
 
     // Convert number to words
     const numberToWords = (num) => {
@@ -328,31 +288,23 @@ const InvoiceManagement = () => {
         return result.trim();
     };
 
-    // Updated onSubmit function to save complete invoice data
+    // Updated onSubmit function to save complete purchase invoice data
     const onSubmit = async (data) => {
-        // Create customer object from form data
-        const customerData = {
-            id: selectedCustomer?.id || `${Date?.now()}`,
-            customerId: selectedCustomer?.customerId || `${Date?.now()}`,
-            name: data?.customerName,
-            phone: data?.customerPhone,
-            address: data?.customerAddress,
-            city: data?.customerCity,
-            email: selectedCustomer?.email || '',
-            state: selectedCustomer?.state || '',
-            zipCode: selectedCustomer?.zipCode || '',
-            country: selectedCustomer?.country || '',
+        // Create supplier object from form data
+        const supplierData = {
+            id: selectedSupplier?.id || `${Date?.now()}`,
+            name: data?.supplierName,
+            phone: data?.supplierPhone,
+            address: data?.supplierAddress,
             previousBalance: parseFloat(data?.previousBalance) || 0,
         };
 
-        // Create invoice data
-        const invoiceData = {
+        // Create purchase invoice data
+        const purchaseInvoiceData = {
             id: isEditing ? editingInvoiceId?.id : Date?.now()?.toString(),
-            invoiceNumber: isEditing ? editingInvoiceId?.invoiceNumber : data?.invoiceNumber,
+            purchaseInvoiceNumber: isEditing ? editingInvoiceId?.purchaseInvoiceNumber : data?.purchaseInvoiceNumber,
             date: data?.date,
-            customer: customerData,
-            salesBy: data?.salesBy,
-            supplier: data?.supplier,
+            supplier: supplierData,
             items: data?.items?.map((item, index) => ({
                 id: selectedProduct?.[index]?.id || `ITEM-${Date?.now()}-${index}`,
                 productId: selectedProduct?.[index]?.id || null,
@@ -361,7 +313,7 @@ const InvoiceManagement = () => {
                 unit: item?.unit,
                 rate: item?.rate,
                 amount: item?.amount,
-                product: selectedProduct?.[index] || null // Store complete product data
+                product: selectedProduct?.[index] || null
             })),
             subTotal: Math.round(subTotal * 100) / 100,
             discount: Math.round(discount * 100) / 100,
@@ -375,38 +327,34 @@ const InvoiceManagement = () => {
 
         let result
         if (isEditing) {
-            result = await updateInvoice?.(editingInvoiceId?.id, invoiceData);
+            result = await updatePurchaseInvoice?.(editingInvoiceId?.id, purchaseInvoiceData);
         } else {
-            if (saveInvoice && typeof saveInvoice === 'function') {
-                result = await saveInvoice?.(invoiceData);
+            if (savePurchaseInvoice && typeof savePurchaseInvoice === 'function') {
+                result = await savePurchaseInvoice?.(purchaseInvoiceData);
             } else {
                 showAlert('Save function not available', 'error');
             }
         }
 
         if (result?.success) {
-            showAlert(`Invoice ${isEditing ? 'updated' : 'created'} successfully!`, 'success');
-            setSelectedInvoice(invoiceData);
+            showAlert(`Purchase invoice ${isEditing ? 'updated' : 'created'} successfully!`, 'success');
+            setSelectedPurchaseInvoice(purchaseInvoiceData);
             setCurrentView('preview');
         } else {
-            showAlert(`Error ${isEditing ? 'updating' : 'creating'} invoice: ${result?.message}`, 'error');
+            showAlert(`Error ${isEditing ? 'updating' : 'creating'} purchase invoice: ${result?.message}`, 'error');
         }
     };
 
-    // Updated handleNewInvoice function to reset all states
-    const handleNewInvoice = () => {
+    // Updated handleNewPurchaseInvoice function to reset all states
+    const handleNewPurchaseInvoice = () => {
         setIsEditing(false)
         reset({
-            invoiceNumber: `INV-${Date?.now()}`,
+            purchaseInvoiceNumber: `PUR-${Date?.now()}`,
             date: new Date()?.toISOString()?.split('T')[0],
-            customerSearch: '',
-            customerName: '',
-            customerPhone: '',
-            customerAddress: '',
-            customerCity: '',
+            supplierName: '',
+            supplierPhone: '',
+            supplierAddress: '',
             previousBalance: 0,
-            salesBy: '',
-            supplier: '',
             items: [{
                 productSearch: '',
                 productName: '',
@@ -417,30 +365,29 @@ const InvoiceManagement = () => {
             }]
         });
 
-        setSelectedCustomer(null);
+        setSelectedSupplier(null);
         setSelectedProduct([]);
-        setSelectedInvoice(null);
-        setShowCustomerDropdown(false);
+        setSelectedPurchaseInvoice(null);
         setShowProductDropdown({});
         setCurrentView('create');
     };
 
-    // Delete invoice
-    const handleDeleteInvoice = async (invoiceId) => {
+    // Delete purchase invoice
+    const handleDeletePurchaseInvoice = async (invoiceId) => {
         const confirmed = await showConfirm({
-            title: "Delete Invoice",
-            message: 'Are you sure you want to delete this invoice?',
+            title: "Delete Purchase Invoice",
+            message: 'Are you sure you want to delete this purchase invoice?',
             confirmText: "Delete",
             cancelText: "Cancel",
             type: "danger"
         });
 
         if (confirmed) {
-            const result = await deleteInvoice?.(invoiceId);
+            const result = await deletePurchaseInvoice?.(invoiceId);
             if (result?.success) {
-                showAlert(`Invoice deleted successfully!`, 'success');
+                showAlert(`Purchase invoice deleted successfully!`, 'success');
             } else {
-                showAlert(`Error deleting invoice: ${result?.error}`, 'error');
+                showAlert(`Error deleting purchase invoice: ${result?.error}`, 'error');
             }
         }
     };
@@ -456,13 +403,13 @@ const InvoiceManagement = () => {
             let quantity = 1;
 
             if (newUnit === 'MASTER') {
-                rate = selectedProductForItem?.pricePerMaster;
+                rate = selectedProductForItem?.purchasePricePerMaster || selectedProductForItem?.pricePerMaster;
                 quantity = 1;
             } else if (newUnit === 'BOX') {
-                rate = selectedProductForItem?.pricePerBox;
+                rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
                 quantity = 1;
             } else if (newUnit === 'HALF') {
-                rate = selectedProductForItem?.pricePerBox;
+                rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
                 quantity = 1;
             }
 
@@ -474,81 +421,22 @@ const InvoiceManagement = () => {
         setTimeout(() => calculateAmount(index), 0);
     };
 
-    // Debounced search function
-    const handleCustomerSearch = (searchValue) => {
-        if (!searchValue || searchValue?.length === 0) {
-            setShowCustomerDropdown(false);
-            setFilteredCustomers([]);
-            return;
-        }
-
-        if (selectedCustomer && selectedCustomer?.name === searchValue) {
-            setShowCustomerDropdown(false);
-            return;
-        }
-
-        const filtered = customers?.filter(customer =>
-            customer?.name?.toLowerCase()?.includes(searchValue?.toLowerCase()) ||
-            customer?.customerId?.toLowerCase()?.includes(searchValue?.toLowerCase()) ||
-            customer?.phone?.includes(searchValue)
-        );
-
-        setFilteredCustomers(filtered);
-        setShowCustomerDropdown(filtered?.length > 0);
-    };
-
-    const customerSearchValue = watch('customerSearch');
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            handleCustomerSearch(customerSearchValue);
-        }, 300);
-
-        return () => clearTimeout(timeoutId);
-    }, [customerSearchValue, customers, selectedCustomer]);
-
-    const handleInputChange = (e) => {
-        const value = e?.target?.value;
-        setValue('customerSearch', value);
-        if (!value) {
-            setSelectedCustomer(null);
-            clearCustomerForm();
-        }
-    };
-
-    const clearCustomerForm = () => {
-        setValue('customerName', '');
-        setValue('customerPhone', '');
-        setValue('customerAddress', '');
-        setValue('customerCity', '');
-        setValue('previousBalance', 0);
-    };
-
-    const clearCustomerSearch = () => {
-        setValue('customerSearch', '');
-        setValue('customerName', '');
-        setValue('customerPhone', '');
-        setValue('customerAddress', '');
-        setValue('customerCity', '');
-        setValue('previousBalance', 0);
-        setSelectedCustomer(null);
-        setShowCustomerDropdown(false);
-        setFilteredCustomers([]);
-    };
-
-    const handleEditInvoice = async (invoice) => {
+    const handleEditPurchaseInvoice = async (invoice) => {
         setIsEditing(true);
         setEditingInvoiceId(invoice);
-        const result = await getInvoice?.(invoice?.id);
+        const result = await getPurchaseInvoice?.(invoice?.id);
         if (result?.success) {
             const invoiceData = result?.data;
 
-            // Set customer data
-            setSelectedCustomer(invoiceData?.customer);
+            // Set supplier data
+            setSelectedSupplier(invoiceData?.supplier);
 
             // Set products data
             const products = invoiceData?.items?.map(item => item?.product || {
                 id: item?.productId,
                 name: item?.name,
+                purchasePricePerMaster: item?.rate,
+                purchasePricePerBox: item?.rate,
                 pricePerMaster: item?.rate,
                 pricePerBox: item?.rate
             });
@@ -556,16 +444,12 @@ const InvoiceManagement = () => {
 
             // Reset and populate the form
             reset({
-                invoiceNumber: invoiceData?.invoiceNumber,
-                date: invoiceData?.date?.split('T')[0], // Format date if needed
-                customerSearch: invoiceData?.customer?.name,
-                customerName: invoiceData?.customer?.name,
-                customerPhone: invoiceData?.customer?.phone,
-                customerAddress: invoiceData?.customer?.address,
-                customerCity: invoiceData?.customer?.city,
-                previousBalance: invoiceData?.customer?.previousBalance,
-                salesBy: invoiceData?.salesBy,
-                supplier: invoiceData?.supplier,
+                purchaseInvoiceNumber: invoiceData?.purchaseInvoiceNumber,
+                date: invoiceData?.date?.split('T')[0],
+                supplierName: invoiceData?.supplier?.name,
+                supplierPhone: invoiceData?.supplier?.phone,
+                supplierAddress: invoiceData?.supplier?.address,
+                previousBalance: invoiceData?.supplier?.previousBalance,
                 items: invoiceData?.items?.map(item => ({
                     productSearch: item?.name,
                     productName: item?.name,
@@ -577,35 +461,34 @@ const InvoiceManagement = () => {
                 }))
             });
 
-            // Set GST rate if available
             if (invoiceData?.discountAmount) {
                 setDiscountAmount(invoiceData?.discountAmount);
             }
             setCurrentView('create');
         } else {
-            showAlert('Failed to load invoice data', "error");
+            showAlert('Failed to load purchase invoice data', "error");
         }
     };
 
-    const handleViewInvoice = (invoice) => {
-        setSelectedInvoice(invoice);
+    const handleViewPurchaseInvoice = (invoice) => {
+        setSelectedPurchaseInvoice(invoice);
         setCurrentView('preview');
     };
 
-    const filteredInvoices = allinvoice?.filter(invoice => {
-        const matchesSearch = invoice?.invoiceNumber?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
-            invoice?.customer?.name?.toLowerCase()?.includes(searchTerm?.toLowerCase());
+    const filteredPurchaseInvoices = allPurchaseInvoices?.filter(invoice => {
+        const matchesSearch = invoice?.purchaseInvoiceNumber?.toLowerCase()?.includes(searchTerm?.toLowerCase()) ||
+            invoice?.supplier?.name?.toLowerCase()?.includes(searchTerm?.toLowerCase());
         const matchesStatus = statusFilter === 'all' || invoice?.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
 
     const calculateDashboardStats = () => {
-        const totalInvoices = allinvoice?.length || 0;
-        const totalAmount = allinvoice?.reduce((sum, inv) => sum + (inv?.total || 0), 0) || 0;
-        const paidInvoices = allinvoice?.filter(inv => inv?.status === 'paid')?.length || 0;
-        const pendingInvoices = allinvoice?.filter(inv => inv?.status === 'pending')?.length || 0;
+        const totalInvoices = allPurchaseInvoices?.length || 0;
+        const totalAmount = allPurchaseInvoices?.reduce((sum, inv) => sum + (inv?.total || 0), 0) || 0;
+        const receivedInvoices = allPurchaseInvoices?.filter(inv => inv?.status === 'received')?.length || 0;
+        const pendingInvoices = allPurchaseInvoices?.filter(inv => inv?.status === 'pending')?.length || 0;
 
-        return { totalInvoices, totalAmount, paidInvoices, pendingInvoices };
+        return { totalInvoices, totalAmount, receivedInvoices, pendingInvoices };
     };
 
     // Real-time calculation updates
@@ -623,26 +506,22 @@ const InvoiceManagement = () => {
 
     const indexOfLastInvoice = currentPage * invoicesPerPage;
     const indexOfFirstInvoice = indexOfLastInvoice - invoicesPerPage;
-    const paginatedInvoices = filteredInvoices?.slice(indexOfFirstInvoice, indexOfLastInvoice);
-    const totalPages = Math.ceil(filteredInvoices?.length / invoicesPerPage);
+    const paginatedInvoices = filteredPurchaseInvoices?.slice(indexOfFirstInvoice, indexOfLastInvoice);
+    const totalPages = Math.ceil(filteredPurchaseInvoices?.length / invoicesPerPage);
 
     const removeItem = (index) => {
-        // Form field remove karein
         remove(index);
 
-        // selectedProduct array se bhi remove karein
         setSelectedProduct(prevProducts => {
             const updatedProducts = [...prevProducts];
             updatedProducts.splice(index, 1);
             return updatedProducts;
         });
 
-        // showProductDropdown state se bhi clean karein
         setShowProductDropdown(prevDropdown => {
             const updated = { ...prevDropdown };
             delete updated[index];
 
-            // Re-index remaining dropdowns
             const newDropdown = {};
             Object.keys(updated).forEach(key => {
                 const keyIndex = parseInt(key);
@@ -659,10 +538,10 @@ const InvoiceManagement = () => {
 
     const handlePreviousBalanceChange = (e) => {
         const value = parseFloat(e.target.value) || 0;
-        const maxBalance = selectedCustomer?.previousBalance || 0;
+        const maxBalance = selectedSupplier?.previousBalance || 0;
 
         if (value > maxBalance) {
-            showAlert(`Amount cannot exceed customer's previous balance of ${maxBalance}`, 'warning');
+            showAlert(`Amount cannot exceed supplier's previous balance of ${maxBalance}`, 'warning');
             setValue('previousBalance', maxBalance);
         } else {
             setValue('previousBalance', value);
@@ -672,7 +551,7 @@ const InvoiceManagement = () => {
     // Show loading state
     if (loading) {
         return (
-            <LoadingDemo message={"Loading Invoices..."} showBackground={false} />
+            <LoadingDemo message={"Loading Purchase Invoices..."} showBackground={false} />
         );
     }
 
@@ -693,7 +572,7 @@ const InvoiceManagement = () => {
     // Dashboard View
     if (currentView === 'dashboard') {
         return (
-            <div className="min-h-screen  p-4">
+            <div className="min-h-screen p-4">
                 {alert?.show && (
                     <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-2xl border-l-4 transform transition-all duration-300 ${alert?.type === 'success'
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-500'
@@ -717,28 +596,28 @@ const InvoiceManagement = () => {
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
-                                <div className="p-3 bg-blue-500 dark:bg-blue-600 rounded-lg">
-                                    <Receipt className="h-6 w-6 text-white" />
+                                <div className="p-3 bg-green-500 dark:bg-green-600 rounded-lg">
+                                    <ShoppingCart className="h-6 w-6 text-white" />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Invoice Management System</h1>
-                                    <p className="text-gray-600 dark:text-gray-400">Manage all your invoices in one place</p>
+                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Purchase Invoice Management</h1>
+                                    <p className="text-gray-600 dark:text-gray-400">Manage all your purchase invoices and supplier transactions</p>
                                 </div>
                             </div>
                             <div className='flex gap-2 items-center'>
                                 <button
-                                    onClick={handleExportInvoices}
+                                    onClick={handleExportPurchaseInvoices}
                                     className="flex items-center px-4 py-2 bg-white/80 dark:bg-gray-700/80 backdrop-blur text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 dark:hover:bg-green-600 border border-gray-200 dark:border-gray-600 rounded-xl hover:shadow-md transition-all duration-200"
                                 >
                                     <Download size={18} className="mr-2" />
                                     <span className="font-medium">Export</span>
                                 </button>
                                 <button
-                                    onClick={handleNewInvoice}
-                                    className="flex items-center px-6 py-3 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors shadow-lg"
+                                    onClick={handleNewPurchaseInvoice}
+                                    className="flex items-center px-6 py-3 bg-green-500 dark:bg-green-600 text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-700 transition-colors shadow-lg"
                                 >
                                     <Plus className="h-5 w-5 mr-2" />
-                                    Create New Invoice
+                                    Create New Purchase
                                 </button>
                             </div>
                         </div>
@@ -749,11 +628,11 @@ const InvoiceManagement = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
                             <div className="flex items-center justify-between w-full gap-4">
                                 <div className='max-w-[70%]'>
-                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Invoices</p>
+                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Purchases</p>
                                     <p className="text-2xl font-bold text-gray-900 dark:text-white overflow-x-auto whitespace-nowrap">{stats?.totalInvoices}</p>
                                 </div>
-                                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                                    <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                                    <ShoppingCart className="h-6 w-6 text-green-600 dark:text-green-400" />
                                 </div>
                             </div>
                         </div>
@@ -764,8 +643,8 @@ const InvoiceManagement = () => {
                                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Amount</p>
                                     <p className="text-2xl font-bold text-gray-900 dark:text-white overflow-x-auto whitespace-nowrap">{stats?.totalAmount?.toFixed(2)}</p>
                                 </div>
-                                <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                                    <DollarSign className="h-6 w-6 text-green-600 dark:text-green-400" />
+                                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                                    <DollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                                 </div>
                             </div>
                         </div>
@@ -773,11 +652,11 @@ const InvoiceManagement = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
                             <div className="flex items-center justify-between w-full gap-4">
                                 <div className='max-w-[70%]'>
-                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Paid Invoices</p>
-                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400 overflow-x-auto whitespace-nowrap">{stats?.paidInvoices}</p>
+                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Received Orders</p>
+                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400 overflow-x-auto whitespace-nowrap">{stats?.receivedInvoices}</p>
                                 </div>
                                 <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                                    <Users className="h-6 w-6 text-green-600 dark:text-green-400" />
+                                    <Truck className="h-6 w-6 text-green-600 dark:text-green-400" />
                                 </div>
                             </div>
                         </div>
@@ -785,7 +664,7 @@ const InvoiceManagement = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending Invoices</p>
+                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Pending Orders</p>
                                     <p className="text-2xl font-bold text-orange-600 dark:text-orange-400 overflow-x-auto whitespace-nowrap max-w-[90%]">{stats?.pendingInvoices}</p>
                                 </div>
                                 <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
@@ -795,20 +674,20 @@ const InvoiceManagement = () => {
                         </div>
                     </div>
 
-                    {/* Invoices Table */}
+                    {/* Purchase Invoices Table */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">All Invoices</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">All Purchase Orders</h2>
                             <div className="flex items-center space-x-4">
                                 {/* Search */}
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
                                     <input
                                         type="text"
-                                        placeholder="Search invoices..."
+                                        placeholder="Search purchases..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e?.target?.value)}
-                                        className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                        className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                     />
                                 </div>
 
@@ -816,12 +695,12 @@ const InvoiceManagement = () => {
                                 <select
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e?.target?.value)}
-                                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                 >
                                     <option value="all">All Status</option>
-                                    <option value="paid">Paid</option>
+                                    <option value="received">Received</option>
                                     <option value="pending">Pending</option>
-                                    <option value="overdue">Overdue</option>
+                                    <option value="cancelled">Cancelled</option>
                                 </select>
                             </div>
                         </div>
@@ -830,9 +709,9 @@ const InvoiceManagement = () => {
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b border-gray-200 dark:border-gray-700">
-                                        <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Invoice #</th>
+                                        <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Purchase #</th>
                                         <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Date</th>
-                                        <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Customer</th>
+                                        <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Supplier</th>
                                         <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Items</th>
                                         <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Amount</th>
                                         <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Status</th>
@@ -842,12 +721,12 @@ const InvoiceManagement = () => {
                                 <tbody>
                                     {paginatedInvoices?.map((invoice) => (
                                         <tr key={invoice?.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="py-3 px-4 font-medium text-blue-600 dark:text-blue-400">{invoice?.invoiceNumber}</td>
+                                            <td className="py-3 px-4 font-medium text-green-600 dark:text-green-400">{invoice?.purchaseInvoiceNumber}</td>
                                             <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{new Date(invoice?.date)?.toLocaleDateString()}</td>
                                             <td className="py-3 px-4">
                                                 <div>
-                                                    <p className="font-medium text-gray-900 dark:text-white">{invoice?.customer?.name}</p>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{invoice?.customer?.customerId}</p>
+                                                    <p className="font-medium text-gray-900 dark:text-white">{invoice?.supplier?.name}</p>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{invoice?.supplier?.address || invoice?.supplier?.phone || "No Detail Found"}</p>
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4 text-gray-600 dark:text-gray-400">{invoice?.items?.length}</td>
@@ -857,15 +736,16 @@ const InvoiceManagement = () => {
                                                     <select
                                                         value={invoice?.status}
                                                         onChange={(e) => handleStatusChange(invoice?.id, e?.target?.value)}
-                                                        className="text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded p-1 focus:ring-1 focus:ring-blue-500"
+                                                        className="text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded p-1 focus:ring-1 focus:ring-green-500"
                                                         autoFocus
                                                         onBlur={() => setEditingStatus(null)}
                                                     >
                                                         <option value="pending">Pending</option>
-                                                        <option value="paid">Paid</option>
+                                                        <option value="received">Received</option>
+                                                        <option value="cancelled">Cancelled</option>
                                                     </select>
                                                 ) : (
-                                                    <div className={`flex items-center rounded-full justify-center gap-2 ${invoice?.status === 'paid'
+                                                    <div className={`flex items-center rounded-full justify-center gap-2 ${invoice?.status === 'received'
                                                         ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
                                                         invoice?.status === 'pending'
                                                             ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
@@ -887,24 +767,24 @@ const InvoiceManagement = () => {
                                             <td className="py-3 px-4">
                                                 <div className="flex items-center space-x-2">
                                                     <button
-                                                        onClick={() => handleViewInvoice(invoice)}
-                                                        className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                                                        title="View Invoice"
+                                                        onClick={() => handleViewPurchaseInvoice(invoice)}
+                                                        className="p-1 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
+                                                        title="View Purchase Invoice"
                                                     >
                                                         <Eye className="h-4 w-4" />
                                                     </button>
-                                                    <SmartPrintInvoice preview={true} selectedInvoice={invoice} onback={() => setCurrentView('dashboard')} />
+                                                    <SmartPrintInvoice preview={true} selectedInvoice={invoice} onback={() => setCurrentView('dashboard')} type="purchase" />
                                                     <button
-                                                        onClick={() => handleEditInvoice(invoice)}
-                                                        className="p-1 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
-                                                        title="Edit Invoice"
+                                                        onClick={() => handleEditPurchaseInvoice(invoice)}
+                                                        className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                                                        title="Edit Purchase Invoice"
                                                     >
                                                         <Edit className="h-4 w-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDeleteInvoice(invoice?.id)}
+                                                        onClick={() => handleDeletePurchaseInvoice(invoice?.id)}
                                                         className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1"
-                                                        title="Delete Invoice"
+                                                        title="Delete Purchase Invoice"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </button>
@@ -915,11 +795,11 @@ const InvoiceManagement = () => {
                                 </tbody>
                             </table>
 
-                            {filteredInvoices?.length === 0 && (
+                            {filteredPurchaseInvoices?.length === 0 && (
                                 <div className="text-center py-8">
-                                    <FileText className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-                                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No invoices found</h3>
-                                    <p className="text-gray-500 dark:text-gray-400">Create your first invoice to get started.</p>
+                                    <ShoppingCart className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No purchase invoices found</h3>
+                                    <p className="text-gray-500 dark:text-gray-400">Create your first purchase order to get started.</p>
                                 </div>
                             )}
                         </div>
@@ -928,7 +808,7 @@ const InvoiceManagement = () => {
                             currentPage={currentPage}
                             totalPages={totalPages}
                             onPageChange={setCurrentPage}
-                            filteredInvoices={filteredInvoices}
+                            filteredInvoices={filteredPurchaseInvoices}
                             indexOfFirstInvoice={indexOfFirstInvoice}
                             indexOfLastInvoice={indexOfLastInvoice}
                         />
@@ -972,12 +852,12 @@ const InvoiceManagement = () => {
                                 >
                                     <ArrowLeft className="h-5 w-5" />
                                 </button>
-                                <div className="p-3 bg-blue-500 dark:bg-blue-600 rounded-lg">
-                                    <FileText className="h-6 w-6 text-white" />
+                                <div className="p-3 bg-green-500 dark:bg-green-600 rounded-lg">
+                                    <ShoppingCart className="h-6 w-6 text-white" />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{isEditing ? 'Update' : 'Create New'} Invoice</h1>
-                                    <p className="text-gray-600 dark:text-gray-400">Fill in the details to create a new invoice</p>
+                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{isEditing ? 'Update' : 'Create New'} Purchase Order</h1>
+                                    <p className="text-gray-600 dark:text-gray-400">Fill in the details to create a purchase order</p>
                                 </div>
                             </div>
                             <div className="text-right">
@@ -988,21 +868,21 @@ const InvoiceManagement = () => {
                     </div>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                        {/* Invoice Info */}
+                        {/* Purchase Invoice Info */}
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
                             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                                <Calculator className="h-5 w-5 mr-2 text-blue-500 dark:text-blue-400" />
-                                Invoice Information
+                                <Calculator className="h-5 w-5 mr-2 text-green-500 dark:text-green-400" />
+                                Purchase Information
                             </h2>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Invoice Number</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Purchase Number</label>
                                     <input
-                                        {...register('invoiceNumber', { required: 'Invoice number is required' })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                        placeholder="INV-001"
+                                        {...register('purchaseInvoiceNumber', { required: 'Purchase number is required' })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
+                                        placeholder="PUR-001"
                                     />
-                                    {errors?.invoiceNumber && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.invoiceNumber?.message}</p>}
+                                    {errors?.purchaseInvoiceNumber && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.purchaseInvoiceNumber?.message}</p>}
                                 </div>
 
                                 <div>
@@ -1010,145 +890,48 @@ const InvoiceManagement = () => {
                                     <input
                                         type="date"
                                         {...register('date', { required: 'Date is required' })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                     />
                                     {errors?.date && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.date?.message}</p>}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sales By</label>
-                                    <select
-                                        {...register('salesBy')}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                    >
-                                        <option value="">Select Sales Person</option>
-                                        {setting?.saleBy?.map((person, index) => (
-                                            <option key={index} value={person}>{person}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Supplier</label>
-                                    <select
-                                        {...register('supplier')}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                    >
-                                        <option value="">Select Supplier</option>
-                                        {setting?.suppliers?.map((supplier, index) => (
-                                            <option key={index} value={supplier}>{supplier}</option>
-                                        ))}
-                                    </select>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Customer Selection */}
+                        {/* Supplier Selection */}
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
                             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                                <User className="h-5 w-5 mr-2 text-blue-500 dark:text-blue-400" />
-                                Customer Information
+                                <Truck className="h-5 w-5 mr-2 text-green-500 dark:text-green-400" />
+                                Supplier Information
                             </h2>
 
-                            <div className="relative mb-4">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Customer</label>
-                                <input
-                                    {...register('customerSearch')}
-                                    onChange={handleInputChange}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                    placeholder="Search customer by name or ID..."
-                                    autoComplete="off"
-                                />
-                                {selectedCustomer && (
-                                    <button
-                                        type="button"
-                                        onClick={clearCustomerSearch}
-                                        className="absolute right-4 top-[50%] text-gray-400 hover:text-gray-600"
-                                    >
-                                        ✕
-                                    </button>
-                                )}
-
-                                {showCustomerDropdown && filteredCustomers?.length > 0 && (
-                                    <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
-                                        {filteredCustomers?.map((customer) => (
-                                            <div
-                                                key={customer?.id}
-                                                onClick={() => selectCustomer(customer)}
-                                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 last:border-b-0"
-                                            >
-                                                <div className="font-medium text-gray-900 dark:text-gray-200">{customer?.name}</div>
-                                                <div className="text-sm text-gray-600 dark:text-gray-400">{customer?.customerId} - {customer?.address}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-
-                            {/* Customer Details Form */}
+                            {/* Supplier Details Form */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Name</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Supplier/Shop Name</label>
                                     <input
-                                        {...register('customerName', { required: 'Customer name is required' })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                        placeholder="Enter customer name"
+                                        {...register('supplierName', { required: 'Supplier/Shop name is required' })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
+                                        placeholder="Enter supplier/shop name"
                                     />
-                                    {errors?.customerName && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.customerName?.message}</p>}
+                                    {errors?.supplierName && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.supplierName?.message}</p>}
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
                                     <input
-                                        {...register('customerPhone', { required: 'Phone is required' })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                        {...register('supplierPhone')}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                         placeholder="Enter phone number"
                                     />
-                                    {errors?.customerPhone && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.customerPhone?.message}</p>}
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
                                     <input
-                                        {...register('customerAddress', { required: 'Address is required' })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                        {...register('supplierAddress')}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                         placeholder="Enter address"
                                     />
-                                    {errors?.customerAddress && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.customerAddress?.message}</p>}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">City</label>
-                                    <input
-                                        {...register('customerCity', { required: 'City is required' })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                        placeholder="Enter city"
-                                    />
-                                    {errors?.customerCity && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.customerCity?.message}</p>}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Previous Balance</label>
-                                    <input
-                                        type="number"
-                                        {...register('previousBalance', {
-                                            min: { value: 0, message: 'Previous balance cannot be negative' },
-                                            validate: (value) => {
-                                                const maxBalance = selectedCustomer?.previousBalance || 0;
-                                                if (parseFloat(value) > maxBalance) {
-                                                    return `Amount cannot exceed customer's previous balance of ${maxBalance}`;
-                                                }
-                                                return true;
-                                            }
-                                        })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                        placeholder="Enter previous balance"
-                                        onChange={handlePreviousBalanceChange}
-                                        max={selectedCustomer?.previousBalance || 0}
-                                        defaultValue={selectedCustomer?.previousBalance || 0}
-                                    />
-                                    {errors?.previousBalance && <p className="text-red-700 dark:text-red-300 text-sm mt-1">{errors?.previousBalance?.message}</p>}
                                 </div>
                             </div>
                         </div>
@@ -1157,8 +940,8 @@ const InvoiceManagement = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                                    <Package className="h-5 w-5 mr-2 text-blue-500 dark:text-blue-400" />
-                                    Invoice Items
+                                    <Package className="h-5 w-5 mr-2 text-green-500 dark:text-green-400" />
+                                    Purchase Items
                                 </h2>
                                 <button
                                     type="button"
@@ -1200,14 +983,14 @@ const InvoiceManagement = () => {
                                                     <div className="relative">
                                                         <input
                                                             {...register(`items.${index}.productSearch`)}
-                                                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 mb-1"
+                                                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 mb-1"
                                                             placeholder="Search product..."
                                                             autoComplete="off"
                                                             onChange={(e) => handleProductSearch(e?.target?.value, index)}
                                                         />
                                                         <input
                                                             {...register(`items.${index}.productName`, { required: 'Product name is required' })}
-                                                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                                             placeholder="Product name"
                                                         />
                                                         {showProductDropdown?.[index] && filteredProducts?.length > 0 && (
@@ -1220,7 +1003,7 @@ const InvoiceManagement = () => {
                                                                     >
                                                                         <div className="font-medium text-gray-900 dark:text-gray-200">{product?.name}</div>
                                                                         <div className="text-xs text-gray-600 dark:text-gray-200/50">
-                                                                            Master: {product?.pricePerMaster} | Box: {product?.pricePerBox}
+                                                                            Purchase - Master: {product?.purchasePricePerMaster || product?.pricePerMaster} | Box: {product?.purchasePricePerBox || product?.pricePerBox}
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -1238,7 +1021,7 @@ const InvoiceManagement = () => {
                                                             min: { value: 0, message: 'Minimum quantity is 1' }
                                                         })}
                                                         disabled={watchedItems?.[index]?.unit === 'HALF'}
-                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                                         onChange={(e) => {
                                                             setValue(`items.${index}.quantity`, e?.target?.value);
                                                             setTimeout(() => calculateAmount(index), 0);
@@ -1248,7 +1031,7 @@ const InvoiceManagement = () => {
                                                 <td className="py-2 px-2">
                                                     <select
                                                         {...register(`items.${index}.unit`)}
-                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                                         onChange={(e) => handleUnitChange(index, e?.target?.value)}
                                                     >
                                                         <option value="MASTER">MASTER</option>
@@ -1264,7 +1047,7 @@ const InvoiceManagement = () => {
                                                             required: 'Rate is required',
                                                             min: { value: 0.01, message: 'Rate must be greater than 0' }
                                                         })}
-                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                                         min="0.01"
                                                         onChange={(e) => {
                                                             setValue(`items.${index}.rate`, e?.target?.value);
@@ -1303,8 +1086,8 @@ const InvoiceManagement = () => {
                         {/* Summary Section */}
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
                             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                                <Calculator className="h-5 w-5 mr-2 text-blue-500 dark:text-blue-400" />
-                                Invoice Summary
+                                <Calculator className="h-5 w-5 mr-2 text-green-500 dark:text-green-400" />
+                                Purchase Summary
                             </h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
@@ -1316,7 +1099,7 @@ const InvoiceManagement = () => {
                                             type="number"
                                             min="0"
                                             max={subTotal}
-                                            defaultValue="" // Use defaultValue instead of value
+                                            defaultValue=""
                                             onChange={(e) => {
                                                 const value = parseFloat(e?.target?.value) || 0;
                                                 if (e?.target?.value === '') {
@@ -1325,11 +1108,11 @@ const InvoiceManagement = () => {
                                                     setDiscountAmount(value);
                                                 } else {
                                                     showAlert('Discount cannot exceed subtotal amount', 'warning');
-                                                    e.target.value = subTotal; // Reset input to max value
+                                                    e.target.value = subTotal;
                                                     setDiscountAmount(subTotal);
                                                 }
                                             }}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                             placeholder="0"
                                         />
                                     </div>
@@ -1358,7 +1141,7 @@ const InvoiceManagement = () => {
                                         <hr className="my-2" />
                                         <div className="flex justify-between text-lg font-bold">
                                             <span>Final Total:</span>
-                                            <span className="text-blue-600">{total}</span>
+                                            <span className="text-green-600">{total}</span>
                                         </div>
                                         <div className="text-xs text-gray-600 dark:text-white mt-2">
                                             <strong>In Words:</strong> {numberToWords(Math.floor(total))} only
@@ -1379,19 +1162,19 @@ const InvoiceManagement = () => {
                             </button>
                             <button
                                 type="submit"
-                                className="px-6 py-3 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors shadow-lg"
+                                className="px-6 py-3 bg-green-500 dark:bg-green-600 text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-700 transition-colors shadow-lg"
                             >
-                                {isEditing ? 'Update Invoice' : 'Create Invoice'}
+                                {isEditing ? 'Update Purchase' : 'Create Purchase Order'}
                             </button>
                         </div>
                     </form>
-                </div >
-            </div >
+                </div>
+            </div>
         );
     }
 
-    // Preview Invoice View
-    if (currentView === 'preview' && selectedInvoice) {
+    // Preview Purchase Invoice View
+    if (currentView === 'preview' && selectedPurchaseInvoice) {
         return (
             <div className="min-h-screen">
                 {alert?.show && (
@@ -1412,8 +1195,7 @@ const InvoiceManagement = () => {
                         </div>
                     </div>
                 )}
-                <SmartPrintInvoice selectedInvoice={selectedInvoice} onback={() => setCurrentView('dashboard')} />
-
+                <SmartPrintInvoice selectedInvoice={selectedPurchaseInvoice} onback={() => setCurrentView('dashboard')} type="purchase" />
             </div>
         );
     }
@@ -1421,4 +1203,4 @@ const InvoiceManagement = () => {
     return null;
 };
 
-export default InvoiceManagement;
+export default PurchaseInvoice

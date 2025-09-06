@@ -45,9 +45,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateInvoiceStatus: (invoiceId, status) => ipcRenderer.invoke('update-invoice-status', invoiceId, status),
   exportInvoices: () => ipcRenderer.invoke('export-invoices'),
   printerCheck: (invoice) => ipcRenderer.invoke('check-printer-fast', invoice),
-  printInvoice: (invoice) => ipcRenderer.invoke('super-fast-print', invoice),
-  downloadInvoice: (invoice) => ipcRenderer.invoke('download-invoice-pdf-silent', invoice),
+  printInvoice: (invoice, type) => ipcRenderer.invoke('super-fast-print', invoice, type),
+  downloadInvoice: (invoice, type) => ipcRenderer.invoke('download-invoice-pdf-silent', invoice, type),
   openPrinterSettings: () => ipcRenderer.invoke('open-printer-settings'),
+
+  // PurchaseInvoice APIs
+  loadPurchaseInvoices: () => ipcRenderer.invoke('load-purchase-invoices'),
+  savePurchaseInvoice: (purchaseInvoiceData) => ipcRenderer.invoke('save-purchase-invoice', purchaseInvoiceData),
+  updatePurchaseInvoice: (purchaseInvoiceId, updateData) => ipcRenderer.invoke('update-purchase-invoice', purchaseInvoiceId, updateData),
+  deletePurchaseInvoice: (purchaseInvoiceId) => ipcRenderer.invoke('delete-purchase-invoice', purchaseInvoiceId),
+  getPurchaseInvoice: (purchaseInvoiceId) => ipcRenderer.invoke('get-purchase-invoice', purchaseInvoiceId),
+  searchPurchaseInvoices: (searchTerm) => ipcRenderer.invoke('search-purchase-invoices', searchTerm),
+  getPurchaseInvoicesBySupplier: (supplierId) => ipcRenderer.invoke('get-purchase-invoices-by-supplier', supplierId),
+  getPurchaseInvoicesByDateRange: (startDate, endDate) => ipcRenderer.invoke('get-purchase-invoices-by-date-range', startDate, endDate),
+  getPendingPurchaseInvoices: () => ipcRenderer.invoke('get-pending-purchase-invoices'),
+  updatePurchaseInvoiceStatus: (purchaseInvoiceId, status) => ipcRenderer.invoke('update-purchase-invoice-status', purchaseInvoiceId, status),
+  exportPurchaseInvoices: () => ipcRenderer.invoke('export-purchase-invoices'),
 
   // Settings APIs
   loadAppSettings: () => ipcRenderer.invoke('load-app-settings'),

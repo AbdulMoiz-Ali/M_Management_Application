@@ -65,6 +65,7 @@ const Layout = () => {
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'products', label: 'Products', icon: Package },
     { id: 'invoices', label: 'Invoices', icon: FileText },
+    { id: 'purchaseinvoice', label: 'Purchase Invoice', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 

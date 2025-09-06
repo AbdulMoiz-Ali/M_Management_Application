@@ -11,6 +11,7 @@ import { useAuth } from './hooks/useAuth';
 import LoginPage from './pages/Login';
 import BlockedPage from './components/BlockedPage';
 import LoadingDemo from './components/LoadingDemo';
+import PurchaseInvoice from './pages/PurchaseInvoice';
 
 function App() {
   const { user, loading, error, licensecheck } = useAuth();
@@ -115,6 +116,7 @@ function App() {
               <Route path="invoices" element={<Invoices />} />
               <Route path="products" element={<Products />} />
               <Route path="customers" element={<Customers />} />
+              <Route path="purchaseinvoice" element={<PurchaseInvoice />} />
               <Route path="settings" element={<Settings />} />
               <Route path="reports" element={<Reports />} />
               {/* Catch all route for authenticated users */}

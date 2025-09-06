@@ -3,7 +3,7 @@ import { Printer, AlertCircle, CheckCircle, Download, Settings, X, ArrowLeft, Ey
 import { useInvoice } from '../hooks/useInvoice';
 import { useAuth } from '../hooks/useAuth';
 
-const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
+const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false, type = 'sales' }) => {
     const [showModal, setShowModal] = useState(false);
     const [printerStatus, setPrinterStatus] = useState(null);
     const [isChecking, setIsChecking] = useState(false);
@@ -18,7 +18,6 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
         openPrinterSettings
     } = useInvoice();
     const { user } = useAuth();
-    // Sample invoice data
 
     const showAlert = (message, type = 'success') => {
         setAlert({ show: true, message, type });
@@ -45,7 +44,7 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
     const fastPrint = async () => {
         setIsPrinting(true);
         try {
-            const result = await printInvoice(selectedInvoice);
+            const result = await printInvoice(selectedInvoice, "purchase");
 
             if (result?.success) {
                 showAlert(`✅ ${result.message || 'Invoice printed successfully!'}`, 'success');
@@ -84,13 +83,15 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
                 throw new Error('No invoice data provided');
             }
 
-            if (!selectedInvoice.invoiceNumber) {
+            const invoiceNumber = type === 'sales' ? selectedInvoice.invoiceNumber : selectedInvoice.purchaseInvoiceNumber;
+
+            if (!invoiceNumber) {
                 throw new Error('Invoice number is missing');
             }
 
             // console.log('Starting PDF download for:', selectedInvoice.invoiceNumber);
 
-            const result = await downloadInvoice(selectedInvoice);
+            const result = await downloadInvoice(selectedInvoice, type === 'sales' ? "sales" : "purchase");
 
             // console.log('PDF result:', result);
 
@@ -116,7 +117,7 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
         suppliers: ["Sukkur ware house supplyer"],
     }
 
-    const generatePrintableHTML = (invoiceData) => {
+    const generateSalesInvoiceHTML = (invoiceData) => {
         // Helper function to calculate previous balance
         const calculatePreviousBalance = () => {
             return invoiceData.customer.previousBalance || 0;
@@ -446,9 +447,9 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
                                 <td>${masterQty}</td>
                                 <td>${halfQty}</td>
                                 <td>${boxQty}</td>
-                                <td>${item?.rate.toFixed(2)}</td>
+                                <td>${item?.rate}</td>
                                 <td></td>
-                                <td>${item?.netPrice.toFixed(2) || item?.amount.toFixed(2)}</td>
+                                <td>${item?.netPrice || item?.amount}</td>
                             </tr>
                             `;
         }).join('')}
@@ -517,6 +518,368 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
         `;
     };
 
+    const generatePurchaseInvoiceHTML = (invoiceData) => {
+        const processedItems = invoiceData.items.map(item => {
+            const product = item.product;
+            let packInfo = '';
+            let displayQuantity = item.quantity;
+
+            if (item.unit === 'MASTER') {
+                packInfo = product ? `1=${product.boxesPerMaster || 24}X${product.piecesPerBox || 12}` : '1=24X12';
+                displayQuantity = item.quantity;
+            } else if (item.unit === 'BOX') {
+                packInfo = product ? `1X${product.piecesPerBox || 12}` : '1X12';
+                displayQuantity = item.quantity;
+            } else if (item.unit === 'HALF') {
+                packInfo = '1/2 Box';
+                displayQuantity = item.quantity;
+            } else {
+                packInfo = '1';
+                displayQuantity = item.quantity;
+            }
+
+            return {
+                ...item,
+                packInfo,
+                displayQuantity,
+                netPrice: item.amount
+            };
+        });
+
+        const currentBill = invoiceData.total.toFixed(1);
+        const subTotalBill = invoiceData.subTotal;
+
+        return `
+        <div class="max-w-4xl mx-auto bg-white print:max-w-none print:mx-0">
+            <style>
+                @media print {
+                    body { 
+                        margin: 0; 
+                        padding: 0; 
+                        -webkit-print-color-adjust: exact;
+                        color-adjust: exact;
+                    }
+                    .print\\:hidden { display: none !important; }
+                    .invoice-container { margin: 0; padding: 15px; }
+                    @page {
+                        margin: 0.5in;
+                        size: A4;
+                    }
+                }
+
+                .invoice-container {
+                    font-family: Arial, sans-serif;
+                    font-size: 11px;
+                    line-height: 1.3;
+                    color: #000;
+                    border: 2px solid #000;
+                    padding: 12px;
+                    margin: 0;
+                    background: white;
+                }
+                
+                .invoice-header {
+                    text-align: center;
+                    border-bottom: 2px solid #000;
+                    padding-bottom: 8px;
+                    margin-bottom: 12px;
+                }
+                
+                .invoice-header h1 {
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin: 0 0 4px 0;
+                    letter-spacing: 1px;
+                }
+                
+                .invoice-header p {
+                    margin: 1px 0;
+                    font-size: 10px;
+                }
+                
+                .invoice-info {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 12px;
+                    gap: 15px;
+                    align-items: flex-start;
+                }
+                
+                .supplier-info {
+                    flex: 1;
+                    font-size: 10px;
+                    min-height: auto;
+                }
+                
+                .supplier-info div {
+                    margin-bottom: 3px;
+                }
+                
+                .invoice-details {
+                    width: 200px;
+                    border: 1px solid #000;
+                    padding: 6px;
+                    font-size: 10px;
+                    height: auto;
+                    min-height: fit-content;
+                }
+                
+                .detail-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 6px;
+                    padding: 1px 0;
+                }
+                
+                .invoice-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    border: 1px solid #000;
+                    margin-bottom: 12px;
+                    font-size: 9px;
+                    table-layout: fixed;
+                }
+                
+                .invoice-table th,
+                .invoice-table td {
+                    border: 1px solid #000;
+                    padding: 4px 3px;
+                    text-align: center;
+                    vertical-align: middle;
+                    word-wrap: break-word;
+                }
+                
+                .invoice-table th {
+                    background-color: #f0f0f0;
+                    font-weight: bold;
+                    font-size: 8px;
+                }
+                
+                .invoice-table .sr {
+                    width: 8%;
+                }
+                
+                .invoice-table .description {
+                    width: 35%;
+                    text-align: left;
+                    font-size: 8px;
+                }
+                
+                .invoice-table .unit-col {
+                    width: 12%;
+                }
+                
+                .invoice-table .qty-col {
+                    width: 10%;
+                }
+                
+                .invoice-table .rate-col {
+                    width: 15%;
+                }
+                
+                .invoice-table .amount-col {
+                    width: 20%;
+                }
+                
+                .total-row {
+                    font-weight: bold;
+                    background-color: #f0f0f0;
+                }
+                
+                .invoice-footer {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-top: 12px;
+                    font-size: 10px;
+                    gap: 15px;
+                    align-items: flex-start;
+                }
+                
+                .footer-left {
+                    width: 250px;
+                    border: 1px solid #000;
+                    padding: 8px;
+                    font-size: 10px;
+                    height: auto;
+                    min-height: 90px;
+                }
+                
+                .footer-left .detail-row {
+                    margin-bottom: 4px;
+                }
+                
+                .account-summary {
+                    padding-top: 4px;
+                    margin-top: 4px;
+                }
+                
+                .total-payable {
+                    border-top: 1px solid #000;
+                    border-bottom: 1px solid #000;
+                    padding: 4px 0;
+                    font-weight: bold;
+                    background-color: #f0f0f0;
+                }
+
+                .footer-right {
+                    width: 250px;
+                    border: 1px solid #000;
+                    padding: 8px;
+                    font-size: 11px;
+                    font-family: Arial, sans-serif;
+                }
+                
+                .signature-section {
+                    margin-top: 8px;
+                    width: 100%;
+                }
+
+                .signature-row {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 8px;
+                    gap: 2px;
+                }
+                
+                .label {
+                    display: inline-block;
+                    white-space: nowrap; 
+                }
+                
+                .signature-line {
+                    flex: 1;
+                    border-bottom: 1px solid #000;
+                    height: 1px;
+                    margin-top: 8px;
+                }
+            </style>
+    
+            <div class="invoice-container">
+                <div class="invoice-header">
+                    <h1>${settings.martName}</h1>
+                    <p>ADDRESS:- ${settings.shopAddress}</p>
+                    <p>${settings.shopContactPhone.join(', ')}</p>
+                </div>
+    
+                <div class="invoice-info">
+                    <div class="supplier-info">
+                        <div><strong>Supplier Name:</strong> ${invoiceData.supplier.name.toUpperCase()}</div>
+                        <div><strong>Address:</strong> ${invoiceData.supplier.address || 'N/A'}</div>
+                        <div><strong>Contact:</strong> ${invoiceData.supplier.phone || 'N/A'}</div>
+                        <div><strong>Status:</strong> ${invoiceData.status.toUpperCase()}</div>
+                    </div>
+    
+                    <div class="invoice-details">
+                        <div class="detail-row">
+                            <span><strong>Date</strong></span>
+                            <span>${new Date(invoiceData.date).toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        }).replace(',', ' ,')}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span><strong>Purchase Invoice</strong></span>
+                            <span>${invoiceData?.purchaseInvoiceNumber?.replace('PUR-', '')}</span>
+                        </div>
+                    </div>
+                </div>
+    
+                <table class="invoice-table">
+                    <thead>
+                        <tr>
+                            <th class="sr">Sr.</th>
+                            <th class="description">Product Description</th>
+                            <th class="unit-col">Unit</th>
+                            <th class="qty-col">Quantity</th>
+                            <th class="rate-col">Rate</th>
+                            <th class="amount-col">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${processedItems?.map((item, index) => `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td class="description">${item.name.toUpperCase()}</td>
+                                <td>${item?.unit}</td>
+                                <td>${item?.quantity}</td>
+                                <td>${item?.rate}</td>
+                                <td>${item?.amount}</td>
+                            </tr>
+                        `)?.join('')}
+                        
+                        <tr class="total-row">
+                            <td colspan="4"><strong>Total</strong></td>
+                            <td><strong>${invoiceData?.totalQuantity}</strong></td>
+                            <td><strong>${subTotalBill}</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+    
+                <div class="invoice-footer">
+                     <div class="footer-left">
+                        <div class="detail-row">
+                            <span><strong>Subtotal</strong></span>
+                            <span>Rs. ${subTotalBill}</span>
+                        </div>
+                        ${invoiceData.discountAmount > 0 ? `
+                        <div class="detail-row">
+                            <span><strong>Discount</strong></span>
+                            <span>Rs. ${invoiceData.discountAmount}</span>
+                        </div>
+                        ` : ''}
+                        ${invoiceData.supplier.previousBalance > 0 ? `
+                        <div class="detail-row">
+                            <span><strong>Previous Balance</strong></span>
+                            <span>Rs. ${invoiceData.supplier.previousBalance}</span>
+                        </div>
+                        ` : ''}
+    
+                        <div class="account-summary">
+                            <div class="detail-row total-payable">
+                                <span><strong>Total Amount</strong></span>
+                                <span>Rs. ${currentBill}</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 8px; font-size: 9px;">
+                            <strong>In Words:</strong> ${invoiceData.amountInWords || 'Amount in words'}
+                        </div>
+                    </div>
+    
+                   <div class="footer-right">
+                   <div class="signature-section">
+                   <div class="signature-row">
+                       <span class="label">Supplier Signature</span>
+                       <span class="signature-line"></span>
+                   </div>
+                   <div class="signature-row">
+                       <span class="label">Received By</span>
+                       <span class="signature-line"></span>
+                   </div>
+                   <div class="signature-row">
+                       <span class="label">Date</span>
+                       <span class="signature-line"></span>
+                   </div>
+                   </div>
+                   </div>
+
+                </div>
+            </div>
+        </div>
+        `;
+    };
+
+    const generatePrintableHTML = (invoiceData) => {
+        if (type === 'sales') {
+            return generateSalesInvoiceHTML(invoiceData);
+        } else if (type === 'purchase') {
+            return generatePurchaseInvoiceHTML(invoiceData);
+        } else {
+            return generateSalesInvoiceHTML(invoiceData);
+        }
+    };
+
     if (preview) {
         return (
             <>
@@ -560,6 +923,10 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
             </>
         )
     }
+    const invoiceNumber = type === 'sales' ? selectedInvoice?.invoiceNumber : selectedInvoice?.purchaseInvoiceNumber;
+
+    const invoiceTitle = type === 'sales' ? 'Sales Invoice Preview' : 'Purchase Invoice Preview';
+
     return (
         <>
             {/* Toast Alert */}
@@ -594,12 +961,13 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
                                 >
                                     <ArrowLeft className="h-5 w-5" />
                                 </button>
-                                <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-lg">
+                                <div className={`p-3 ${type === 'sales' ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gradient-to-r from-green-500 to-teal-600'} rounded-lg shadow-lg`}>
                                     <Eye className="h-6 w-6 text-white" />
                                 </div>
+
                                 <div>
-                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Invoice Preview</h1>
-                                    <p className="text-gray-600 dark:text-gray-400">{selectedInvoice.invoiceNumber}</p>
+                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{invoiceTitle}</h1>
+                                    <p className="text-gray-600 dark:text-gray-400">{invoiceNumber}</p>
                                 </div>
                             </div>
                             <div className="flex items-center space-x-3">
@@ -623,7 +991,7 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
                                 <button
                                     onClick={handlePrintClick}
                                     disabled={isChecking || isDownloading}
-                                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-blue-400 disabled:to-purple-400 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
+                                    className={`${type === 'sales' ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700' : 'bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700'} disabled:from-blue-400 disabled:to-purple-400 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:cursor-not-allowed`}
                                 >
                                     {isChecking ? (
                                         <>
@@ -643,13 +1011,14 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
                                     )}
                                 </button>
                             </div>
+
                         </div>
                     </div>
-
                     {/* Invoice Content */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 !text-black border  dark:border-gray-700 transition-colors duration-300">
                         <div dangerouslySetInnerHTML={{ __html: generatePrintableHTML(selectedInvoice) }} />
                     </div>
+
                 </div>
             </div>
 
@@ -672,7 +1041,7 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
 
                         {/* Modal Content */}
                         <div className="text-center">
-                            <h3 className="text-xl font-bold mb-4 text-black dark:text-white">Print Invoice #{selectedInvoice.invoiceNumber}</h3>
+                            <h3 className="text-xl font-bold mb-4 text-black dark:text-white">Print {type === 'sales' ? 'Sales' : 'Purchase'} Invoice #{invoiceNumber}</h3>
 
                             {isChecking ? (
                                 /* Checking State */
@@ -786,6 +1155,7 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false }) => {
                     </div>
                 </div>
             )}
+
         </>
     );
 };

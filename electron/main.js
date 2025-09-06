@@ -19,6 +19,7 @@ const productsPath = path.join(app.getPath('userData'), 'products.json');
 const customersPath = path.join(app.getPath('userData'), 'customers.json');
 const invoicesFilePath = path.join(app.getPath('userData'), 'invoices.json');
 const settingsPath = path.join(app.getPath('userData'), 'app-settings.json');
+const purchaseInvoicesPath = path.join(app.getPath('userData'), 'purchaseInvoices.json');
 
 // Global variables
 let licenseChecker = null;
@@ -97,6 +98,11 @@ const defaultInvoices = {
     invoices: []
 };
 
+
+const defaultPurchaceInvoices = {
+    purchaseInvoices: []
+};
+
 const defaultAppSettings = {
     theme: 'light',
     autoBackup: true,
@@ -172,6 +178,14 @@ async function loadInvoices() {
 
 async function saveInvoicesData(invoices) {
     return await saveToFile(invoicesFilePath, invoices);
+}
+
+async function loadPurchaseInvoices() {
+    return await loadFromFile(purchaseInvoicesPath, defaultPurchaceInvoices);
+}
+
+async function savePurchaseInvoicesData(invoices) {
+    return await saveToFile(purchaseInvoicesPath, invoices);
 }
 
 //main.js for electron
@@ -1475,7 +1489,7 @@ ipcMain.handle('check-printer-fast', async (event) => {
 });
 
 // API 2: Super Fast Print (After printer confirmed)
-ipcMain.handle('super-fast-print', async (event, invoiceData) => {
+ipcMain.handle('super-fast-print', async (event, invoiceData, type) => {
     // console.log('⚡ Super fast print started for invoice:', invoiceData?.invoiceNumber);
     const config = await loadConfig();
     const setting = await config?.basicInformation || {
@@ -1495,7 +1509,7 @@ ipcMain.handle('super-fast-print', async (event, invoiceData) => {
         }
 
         // Generate HTML content
-        const htmlContent = generatePrintableHTML(invoiceData, setting);
+        const htmlContent = generatePrintableHTML(invoiceData, setting, type);
         if (!htmlContent) {
             throw new Error('Failed to generate printable content');
         }
@@ -1566,7 +1580,7 @@ ipcMain.handle('super-fast-print', async (event, invoiceData) => {
             success: true,
             message: `Invoice printed successfully to ${defaultPrinter.name}!`,
             printer: defaultPrinter.name,
-            invoiceNumber: invoiceData.invoiceNumber,
+            invoiceNumber: type === 'sales' ? invoiceData?.invoiceNumber : invoiceData?.purchaseInvoiceNumber,
             timestamp: new Date().toISOString()
         };
 
@@ -1580,7 +1594,7 @@ ipcMain.handle('super-fast-print', async (event, invoiceData) => {
         return {
             success: false,
             error: error.message,
-            invoiceNumber: invoiceData?.invoiceNumber
+            invoiceNumber: type === 'sales' ? invoiceData?.invoiceNumber : invoiceData?.purchaseInvoiceNumber
         };
     }
 });
@@ -1651,7 +1665,7 @@ ipcMain.handle('smart-print-with-modal', async (event, invoiceData) => {
 });
 
 // Alternative: Simple auto-download without showing window
-ipcMain.handle('download-invoice-pdf-silent', async (event, invoiceData) => {
+ipcMain.handle('download-invoice-pdf-silent', async (event, invoiceData, type) => {
     let pdfWindow = null;
     const config = await loadConfig();
     const setting = await config?.basicInformation || {
@@ -1662,7 +1676,7 @@ ipcMain.handle('download-invoice-pdf-silent', async (event, invoiceData) => {
         supplers: ["Sukkur ware house supplyer"],
     };
     try {
-        const htmlContent = generatePrintableHTML(invoiceData, setting);
+        const htmlContent = generatePrintableHTML(invoiceData, setting, type);
 
         // Create hidden window
         pdfWindow = new BrowserWindow({
@@ -1700,7 +1714,7 @@ ipcMain.handle('download-invoice-pdf-silent', async (event, invoiceData) => {
 
         const { filePath, canceled } = await dialog.showSaveDialog({
             title: 'Save Invoice PDF',
-            defaultPath: `Invoice_${invoiceData.invoiceNumber}.pdf`,
+            defaultPath: `Invoice_${type === 'sales' ? invoiceData?.invoiceNumber : invoiceData?.purchaseInvoiceNumber}.pdf`,
             filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
         });
 
@@ -1721,8 +1735,9 @@ ipcMain.handle('open-printer-settings', async () => {
     await shell.openExternal('ms-settings:printers');
 });
 
+
 // Improved HTML generation function
-function generatePrintableHTML(invoiceData, settings) {
+function generateSalesInvoiceHTML(invoiceData, settings) {
     try {
         // console.log('Generating HTML for invoice:', invoiceData?.invoiceNumber);
         // Process items for display
@@ -2132,7 +2147,412 @@ function generatePrintableHTML(invoiceData, settings) {
 }
 
 
+function generatePurchaseInvoiceHTML(invoiceData, settings) {
+    const processedItems = invoiceData.items.map(item => {
+        const product = item.product;
+        let packInfo = '';
 
+        if (item.unit === 'MASTER') {
+            packInfo = product ? `1=${product.boxesPerMaster || 24}X${product.piecesPerBox || 12}` : '1=24X12';
+        } else if (item.unit === 'BOX') {
+            packInfo = product ? `1X${product.piecesPerBox || 12}` : '1X12';
+        } else if (item.unit === 'HALF') {
+            packInfo = '1/2 Box';
+        } else {
+            packInfo = '1';
+        }
+
+        return {
+            ...item,
+            packInfo,
+            netPrice: item.amount
+        };
+    });
+
+    const currentBill = invoiceData.total.toFixed(1);
+    const subTotalBill = invoiceData.subTotal;
+
+    const content = `
+    <div class="max-w-4xl mx-auto bg-white print:max-w-none print:mx-0">
+        <style>
+            @media print {
+                body { 
+                    margin: 0; 
+                    padding: 0; 
+                    -webkit-print-color-adjust: exact;
+                    color-adjust: exact;
+                }
+                .print\\:hidden { display: none !important; }
+                .invoice-container { margin: 0; padding: 15px; }
+                @page {
+                    margin: 0.5in;
+                    size: A4;
+                }
+            }
+
+            .invoice-container {
+                font-family: Arial, sans-serif;
+                font-size: 11px;
+                line-height: 1.3;
+                color: #000;
+                border: 2px solid #000;
+                padding: 12px;
+                margin: 0;
+                background: white;
+            }
+            
+            .invoice-header {
+                text-align: center;
+                border-bottom: 2px solid #000;
+                padding-bottom: 8px;
+                margin-bottom: 12px;
+            }
+            
+            .invoice-header h1 {
+                font-size: 16px;
+                font-weight: bold;
+                margin: 0 0 4px 0;
+                letter-spacing: 1px;
+            }
+            
+            .invoice-header p {
+                margin: 1px 0;
+                font-size: 10px;
+            }
+            
+            .invoice-info {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 12px;
+                gap: 15px;
+                align-items: flex-start;
+            }
+            
+            .supplier-info {
+                flex: 1;
+                font-size: 10px;
+                min-height: auto;
+            }
+            
+            .supplier-info div {
+                margin-bottom: 3px;
+            }
+            
+            .invoice-details {
+                width: 200px;
+                border: 1px solid #000;
+                padding: 6px;
+                font-size: 10px;
+                height: auto;
+                min-height: fit-content;
+            }
+            
+            .detail-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 6px;
+                padding: 1px 0;
+            }
+            
+            .invoice-table {
+                width: 100%;
+                border-collapse: collapse;
+                border: 1px solid #000;
+                margin-bottom: 12px;
+                font-size: 9px;
+                table-layout: fixed;
+            }
+            
+            .invoice-table th,
+            .invoice-table td {
+                border: 1px solid #000;
+                padding: 4px 3px;
+                text-align: center;
+                vertical-align: middle;
+                word-wrap: break-word;
+            }
+            
+            .invoice-table th {
+                background-color: #f0f0f0;
+                font-weight: bold;
+                font-size: 8px;
+            }
+            
+            .invoice-table .sr {
+                width: 8%;
+            }
+            
+            .invoice-table .description {
+                width: 35%;
+                text-align: left;
+                font-size: 8px;
+            }
+            
+            .invoice-table .unit-col {
+                width: 12%;
+            }
+            
+            .invoice-table .qty-col {
+                width: 10%;
+            }
+            
+            .invoice-table .rate-col {
+                width: 15%;
+            }
+            
+            .invoice-table .amount-col {
+                width: 20%;
+            }
+            
+            .total-row {
+                font-weight: bold;
+                background-color: #f0f0f0;
+            }
+            
+            .invoice-footer {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 12px;
+                font-size: 10px;
+                gap: 15px;
+                align-items: flex-start;
+            }
+            
+            .footer-left {
+                width: 250px;
+                border: 1px solid #000;
+                padding: 8px;
+                font-size: 10px;
+                height: auto;
+                min-height: 90px;
+            }
+            
+            .footer-left .detail-row {
+                margin-bottom: 4px;
+            }
+            
+            .account-summary {
+                padding-top: 4px;
+                margin-top: 4px;
+            }
+            
+            .total-payable {
+                border-top: 1px solid #000;
+                border-bottom: 1px solid #000;
+                padding: 4px 0;
+                font-weight: bold;
+                background-color: #f0f0f0;
+            }
+
+            .footer-right {
+                width: 250px;
+                border: 1px solid #000;
+                padding: 8px;
+                font-size: 11px;
+                font-family: Arial, sans-serif;
+            }
+            
+            .signature-section {
+                margin-top: 8px;
+                width: 100%;
+            }
+
+            .signature-row {
+                display: flex;
+                align-items: center;
+                margin-bottom: 8px;
+                gap: 2px;
+            }
+            
+            .label {
+                display: inline-block;
+                white-space: nowrap; 
+            }
+            
+            .signature-line {
+                flex: 1;
+                border-bottom: 1px solid #000;
+                height: 1px;
+                margin-top: 8px;
+            }
+        </style>
+
+        <div class="invoice-container">
+            <div class="invoice-header">
+                <h1>${settings.martName}</h1>
+                <p>ADDRESS:- ${settings.shopAddress}</p>
+                <p>${settings.shopContactPhone.join(', ')}</p>
+            </div>
+
+            <div class="invoice-info">
+                <div class="supplier-info">
+                    <div><strong>Supplier Name:</strong> ${invoiceData.supplier.name.toUpperCase()}</div>
+                    <div><strong>Address:</strong> ${invoiceData.supplier.address || 'N/A'}</div>
+                    <div><strong>Contact:</strong> ${invoiceData.supplier.phone || 'N/A'}</div>
+                    <div><strong>Status:</strong> ${invoiceData.status.toUpperCase()}</div>
+                </div>
+
+                <div class="invoice-details">
+                    <div class="detail-row">
+                        <span><strong>Date</strong></span>
+                        <span>${new Date(invoiceData.date).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+    }).replace(',', ' ,')}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span><strong>Purchase Invoice</strong></span>
+                        <span>${invoiceData?.purchaseInvoiceNumber?.replace('PUR-', '')}</span>
+                    </div>
+                </div>
+            </div>
+
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th class="sr">Sr.</th>
+                        <th class="description">Product Description</th>
+                        <th class="unit-col">Unit</th>
+                        <th class="qty-col">Quantity</th>
+                        <th class="rate-col">Rate</th>
+                        <th class="amount-col">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${processedItems?.map((item, index) => `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td class="description">${item.name.toUpperCase()}</td>
+                            <td>${item?.unit}</td>
+                            <td>${item?.quantity}</td>
+                            <td>${item?.rate}</td>
+                            <td>${item?.amount}</td>
+                        </tr>
+                    `)?.join('')}
+                    
+                    <tr class="total-row">
+                        <td colspan="4"><strong>Total</strong></td>
+                        <td><strong>${invoiceData?.totalQuantity}</strong></td>
+                        <td><strong>${subTotalBill}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="invoice-footer">
+                 <div class="footer-left">
+                    <div class="detail-row">
+                        <span><strong>Subtotal</strong></span>
+                        <span>Rs. ${subTotalBill}</span>
+                    </div>
+                    ${invoiceData.discountAmount > 0 ? `
+                    <div class="detail-row">
+                        <span><strong>Discount</strong></span>
+                        <span>Rs. ${invoiceData.discountAmount}</span>
+                    </div>
+                    ` : ''}
+                    ${invoiceData.supplier.previousBalance > 0 ? `
+                    <div class="detail-row">
+                        <span><strong>Previous Balance</strong></span>
+                        <span>Rs. ${invoiceData.supplier.previousBalance}</span>
+                    </div>
+                    ` : ''}
+
+                    <div class="account-summary">
+                        <div class="detail-row total-payable">
+                            <span><strong>Total Amount</strong></span>
+                            <span>Rs. ${currentBill}</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 8px; font-size: 9px;">
+                        <strong>In Words:</strong> ${invoiceData.amountInWords || 'Amount in words'}
+                    </div>
+                </div>
+
+               <div class="footer-right">
+               <div class="signature-section">
+               <div class="signature-row">
+                   <span class="label">Supplier Signature</span>
+                   <span class="signature-line"></span>
+               </div>
+               <div class="signature-row">
+                   <span class="label">Received By</span>
+                   <span class="signature-line"></span>
+               </div>
+               <div class="signature-row">
+                   <span class="label">Date</span>
+                   <span class="signature-line"></span>
+               </div>
+               </div>
+               </div>
+
+            </div>
+        </div>
+    </div>
+    `;
+
+    const fullHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Invoice ${invoiceData?.purchaseInvoiceNumber || 'Unknown'}</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body { 
+                font-family: Arial, sans-serif; 
+                font-size: 12px;
+                line-height: 1.4;
+                color: #333;
+                background: white;
+                padding: 0;
+                margin: 0;
+            }
+            
+            
+            @media print { 
+                body { 
+                    margin: 0 !important; 
+                    padding: 0 !important;
+                    -webkit-print-color-adjust: exact !important;
+                    color-adjust: exact !important;
+                }
+                
+                @page {
+                    margin: 0.5in;
+                    size: A4;
+                }
+            }
+        </style>
+    </head>
+    <body>${content}</body>
+    </html>
+`;
+
+    // console.log('HTML generated successfully, length:', fullHTML?.length);
+    return fullHTML;
+}
+
+function generatePrintableHTML(invoiceData, settings, invoiceType = 'sales') {
+    try {
+        if (invoiceType === 'sales') {
+            return generateSalesInvoiceHTML(invoiceData, settings);
+        } else if (invoiceType === 'purchase') {
+            return generatePurchaseInvoiceHTML(invoiceData, settings);
+        } else {
+            throw new Error(`Unsupported invoice type: ${invoiceType}`);
+        }
+    } catch (error) {
+        // console.error('Error generating HTML:', error);
+        return null;
+    }
+}
 
 // Settings IPC Handlers
 ipcMain.handle('load-app-settings', async () => {
@@ -2206,6 +2626,304 @@ ipcMain.handle('import-data', async () => {
     }
 });
 
+
+// Purchase Invoice IPC Handlers (Add to your main.js or handlers file)
+
+ipcMain.handle('load-purchase-invoices', async () => {
+    try {
+        const data = await loadPurchaseInvoices();
+        return { success: true, data: data.purchaseInvoices };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('save-purchase-invoice', async (event, purchaseInvoiceData) => {
+    try {
+        const data = await loadPurchaseInvoices();
+
+        // Check if purchase invoice already exists (for updates)
+        const existingIndex = data.purchaseInvoices.findIndex(inv => inv.id === purchaseInvoiceData.id);
+
+        if (existingIndex !== -1) {
+            // Update existing purchase invoice
+            data.purchaseInvoices[existingIndex] = {
+                ...purchaseInvoiceData,
+                updatedAt: new Date().toISOString()
+            };
+        } else {
+            // Create new purchase invoice
+            const newPurchaseInvoice = {
+                ...purchaseInvoiceData,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            data.purchaseInvoices.push(newPurchaseInvoice);
+        }
+
+        const result = await savePurchaseInvoicesData(data);
+
+        if (result.success) {
+            const savedPurchaseInvoice = existingIndex !== -1 ? data.purchaseInvoices[existingIndex] : data.purchaseInvoices[data.purchaseInvoices.length - 1];
+            return { success: true, data: savedPurchaseInvoice };
+        }
+        return result;
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('update-purchase-invoice', async (event, purchaseInvoiceId, updateData) => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const purchaseInvoiceIndex = data.purchaseInvoices.findIndex(inv => inv.id === purchaseInvoiceId);
+
+        if (purchaseInvoiceIndex === -1) {
+            return { success: false, error: 'Purchase invoice not found' };
+        }
+
+        data.purchaseInvoices[purchaseInvoiceIndex] = {
+            ...data.purchaseInvoices[purchaseInvoiceIndex],
+            ...updateData,
+            updatedAt: new Date().toISOString()
+        };
+
+        const result = await savePurchaseInvoicesData(data);
+
+        if (result.success) {
+            return { success: true, data: data.purchaseInvoices[purchaseInvoiceIndex] };
+        }
+        return result;
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('delete-purchase-invoice', async (event, purchaseInvoiceId) => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const purchaseInvoiceIndex = data.purchaseInvoices.findIndex(inv => inv.id === purchaseInvoiceId);
+
+        if (purchaseInvoiceIndex === -1) {
+            return { success: false, error: 'Purchase invoice not found' };
+        }
+
+        const deletedPurchaseInvoice = data.purchaseInvoices[purchaseInvoiceIndex];
+        data.purchaseInvoices.splice(purchaseInvoiceIndex, 1);
+
+        const result = await savePurchaseInvoicesData(data);
+
+        if (result.success) {
+            return { success: true, data: deletedPurchaseInvoice };
+        }
+        return result;
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('get-purchase-invoice', async (event, purchaseInvoiceId) => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const purchaseInvoice = data.purchaseInvoices.find(inv => inv.id === purchaseInvoiceId);
+
+        if (!purchaseInvoice) {
+            return { success: false, error: 'Purchase invoice not found' };
+        }
+
+        return { success: true, data: purchaseInvoice };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('search-purchase-invoices', async (event, searchTerm) => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const filteredPurchaseInvoices = data.purchaseInvoices.filter(purchaseInvoice =>
+            purchaseInvoice.purchaseInvoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            purchaseInvoice.supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            purchaseInvoice.supplier.phone.includes(searchTerm) ||
+            purchaseInvoice.receivedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            purchaseInvoice.status.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        return { success: true, data: filteredPurchaseInvoices };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('get-purchase-invoices-by-supplier', async (event, supplierId) => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const supplierPurchaseInvoices = data.purchaseInvoices.filter(purchaseInvoice =>
+            purchaseInvoice.supplier.id === supplierId || purchaseInvoice.supplier.supplierId === supplierId
+        );
+
+        return { success: true, data: supplierPurchaseInvoices };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('get-purchase-invoices-by-date-range', async (event, startDate, endDate) => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const filteredPurchaseInvoices = data.purchaseInvoices.filter(purchaseInvoice => {
+            const purchaseInvoiceDate = new Date(purchaseInvoice.date);
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            return purchaseInvoiceDate >= start && purchaseInvoiceDate <= end;
+        });
+
+        return { success: true, data: filteredPurchaseInvoices };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('get-pending-purchase-invoices', async () => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const pendingPurchaseInvoices = data.purchaseInvoices.filter(purchaseInvoice =>
+            purchaseInvoice.status === 'pending'
+        );
+
+        return { success: true, data: pendingPurchaseInvoices };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('update-purchase-invoice-status', async (event, purchaseInvoiceId, status) => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const purchaseInvoiceIndex = data.purchaseInvoices.findIndex(inv => inv.id === purchaseInvoiceId);
+
+        if (purchaseInvoiceIndex === -1) {
+            return { success: false, error: 'Purchase invoice not found' };
+        }
+
+        data.purchaseInvoices[purchaseInvoiceIndex].status = status;
+        data.purchaseInvoices[purchaseInvoiceIndex].updatedAt = new Date().toISOString();
+
+        const result = await savePurchaseInvoicesData(data);
+
+        if (result.success) {
+            return { success: true, data: data.purchaseInvoices[purchaseInvoiceIndex] };
+        }
+        return result;
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('export-purchase-invoices', async () => {
+    try {
+        const data = await loadPurchaseInvoices();
+        const result = await dialog.showSaveDialog({
+            title: 'Export Purchase Invoice Data',
+            defaultPath: `purchase-invoices-${new Date().toISOString().split('T')[0]}.xlsx`,
+            filters: [
+                { name: 'Excel Files', extensions: ['xlsx'] },
+                { name: 'All Files', extensions: ['*'] }
+            ]
+        });
+
+        if (!result.canceled && result.filePath) {
+            // Create Excel workbook
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Purchase Invoices');
+
+            // Add headers
+            worksheet.columns = [
+                { header: 'Purchase Invoice ID', key: 'id', width: 20 },
+                { header: 'Purchase Invoice Number', key: 'purchaseInvoiceNumber', width: 20 },
+                { header: 'Date', key: 'date', width: 15 },
+                { header: 'Supplier Name', key: 'supplierName', width: 25 },
+                { header: 'Supplier Phone', key: 'supplierPhone', width: 15 },
+                { header: 'Supplier City', key: 'supplierCity', width: 15 },
+                { header: 'Received By', key: 'receivedBy', width: 20 },
+                { header: 'Purchase From', key: 'purchaseFrom', width: 20 },
+                { header: 'Sub Total', key: 'subTotal', width: 15 },
+                { header: 'Discount Rate', key: 'discount', width: 12 },
+                { header: 'Discount Amount', key: 'discountAmount', width: 15 },
+                { header: 'Total Amount', key: 'total', width: 15 },
+                { header: 'Total Quantity', key: 'totalQuantity', width: 15 },
+                { header: 'Status', key: 'status', width: 12 },
+                { header: 'Created At', key: 'createdAt', width: 20 }
+            ];
+
+            // Add rows with purchase invoice data
+            data?.purchaseInvoices?.forEach(purchaseInvoice => {
+                worksheet.addRow({
+                    id: purchaseInvoice.id,
+                    purchaseInvoiceNumber: purchaseInvoice.purchaseInvoiceNumber,
+                    date: purchaseInvoice.date,
+                    supplierName: purchaseInvoice.supplier.name,
+                    supplierPhone: purchaseInvoice.supplier.phone,
+                    supplierCity: purchaseInvoice.supplier.city,
+                    receivedBy: purchaseInvoice.receivedBy,
+                    purchaseFrom: purchaseInvoice.purchaseFrom,
+                    subTotal: purchaseInvoice.subTotal,
+                    discount: purchaseInvoice.discount,
+                    discountAmount: purchaseInvoice.discountAmount,
+                    total: purchaseInvoice.total,
+                    totalQuantity: purchaseInvoice.totalQuantity,
+                    status: purchaseInvoice.status,
+                    createdAt: purchaseInvoice.createdAt
+                });
+            });
+
+            // Apply styles to header row
+            worksheet.getRow(1).eachCell(cell => {
+                cell.font = { bold: true };
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFD9E1F2' }
+                };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+
+            // Center align all cells
+            worksheet.eachRow((row) => {
+                row.eachCell((cell) => {
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                });
+            });
+
+            // Save the Excel file
+            await workbook.xlsx.writeFile(result.filePath);
+            return { success: true, path: result.filePath };
+        }
+        return { success: false, canceled: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Additional handlers for download and print
+ipcMain.handle('download-purchase-invoice', async (event, purchaseInvoiceData) => {
+    try {
+        // Your download logic here
+        return { success: true, data: 'Download completed' };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('print-purchase-invoice', async (event, purchaseInvoiceData) => {
+    try {
+        // Your print logic here
+        return { success: true, data: 'Print completed' };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+
 function createWindow() {
     const mainWindow = new BrowserWindow({
         width: 1200,
@@ -2225,7 +2943,7 @@ function createWindow() {
 
     // Load app
     // if (process.env.NODE_ENV === 'development') {
-    if (false) {
+    if (true) {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {

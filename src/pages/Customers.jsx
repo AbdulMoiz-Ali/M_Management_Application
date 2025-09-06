@@ -29,6 +29,7 @@ import SmartPrintInvoice from '../components/SmartPrintInvoice';
 import Customerhistory from '../components/Customerhistory';
 import Pagination from '../components/Pagination';
 import LoadingDemo from '../components/LoadingDemo';
+import useConfirmDialog from '../components/ConfirmationDialog';
 
 const CustomerManagement = () => {
     const {
@@ -55,6 +56,8 @@ const CustomerManagement = () => {
         clearError,
         setSearchTerm
     } = useCustomer();
+
+    const { showConfirm, ConfirmDialog } = useConfirmDialog();
 
     const {
         clientinvoice,
@@ -157,7 +160,15 @@ const CustomerManagement = () => {
     };
 
     const handleDelete = async (customer) => {
-        if (window.confirm(`Are you sure you want to delete "${customer?.name}"?`)) {
+        const confirmed = await showConfirm({
+            title: "Delete Customer",
+            message: `Are you sure you want to delete "${customer?.name}"?`,
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            type: "danger"
+        });
+
+        if (confirmed) {
             const result = await deleteCustomer?.(customer?.id);
             if (result?.success) {
                 showAlert('Customer deleted successfully', 'success');
@@ -736,6 +747,8 @@ const CustomerManagement = () => {
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog />
         </div>
     );
 };
