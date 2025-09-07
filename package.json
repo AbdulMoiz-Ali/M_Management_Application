@@ -28,6 +28,7 @@
     "cross-env": "^7.0.3",
     "crypto": "^1.0.1",
     "dotenv": "^16.5.0",
+    "electron-updater": "^6.6.2",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.511.0",
     "node-fetch": "^2.7.0",

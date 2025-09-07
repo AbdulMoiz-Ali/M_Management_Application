@@ -37,7 +37,8 @@ const ProductManagement = () => {
         name: "",
         unitPrice: "",
         boxesPerMaster: "",
-        piecesPerBox: "",
+        stock: "",
+        halfMaster: "",
         pricePerBox: "",
         pricePerMaster: "",
     };
@@ -53,28 +54,17 @@ const ProductManagement = () => {
         setFilteredProducts(products);
     }, [products]);
 
-    // Calculate whenever relevant fields change
     useEffect(() => {
-        const unitPrice = parseFloat(data?.unitPrice) || 0;
-        const piecesPerBox = parseInt(data?.piecesPerBox) || 0;
+        const pricePerBox = parseFloat(data?.pricePerBox) || 0;
         const boxesPerMaster = parseInt(data?.boxesPerMaster) || 0;
 
-        const autoBoxPrice = unitPrice * piecesPerBox;
-        const autoMasterPrice = autoBoxPrice * boxesPerMaster;
+        const autoMasterPrice = pricePerBox * boxesPerMaster;
 
         setCalculated({
-            autoPriceperBox: autoBoxPrice,
             autoPriceperMaster: autoMasterPrice
         });
+    }, [data?.pricePerBox, data?.boxesPerMaster]);
 
-        // Auto-fill if fields are empty
-        if (!data?.pricePerBox) {
-            setData(prev => ({ ...prev, pricePerBox: autoBoxPrice.toString() }));
-        }
-        if (!data?.pricePerMaster) {
-            setData(prev => ({ ...prev, pricePerMaster: autoMasterPrice.toString() }));
-        }
-    }, [data?.unitPrice, data?.piecesPerBox, data?.boxesPerMaster]);
 
     // Stats calculation
     const stats = {
@@ -114,8 +104,9 @@ const ProductManagement = () => {
             name: data?.name,
             unitPrice: parseFloat(data?.unitPrice || 0),
             boxesPerMaster: parseInt(data?.boxesPerMaster || 0),
-            piecesPerBox: parseInt(data?.piecesPerBox || 0),
+            stock: parseInt(data?.stock || 0),
             pricePerBox: parseFloat(data?.pricePerBox || 0),
+            halfMaster: parseFloat(data?.halfMaster || 0),
             pricePerMaster: parseFloat(data?.pricePerMaster || 0)
         };
 
@@ -140,8 +131,9 @@ const ProductManagement = () => {
             name: product?.name || "",
             unitPrice: product?.unitPrice?.toString() || "",
             boxesPerMaster: product?.boxesPerMaster?.toString() || "",
-            piecesPerBox: product?.piecesPerBox?.toString() || "",
+            stock: product?.stock?.toString() || "",
             pricePerBox: product?.pricePerBox?.toString() || "",
+            halfMaster: product?.halfMaster?.toString() || "",
             pricePerMaster: product?.pricePerMaster?.toString() || ""
         });
         setShowModal(true);
@@ -332,7 +324,7 @@ const ProductManagement = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                     {paginatedInvoices?.map((product, index) => {
-                                        const autoMasterPrice = (product?.unitPrice || 0) * (product?.piecesPerBox || 0) * (product?.boxesPerMaster || 0);
+                                        const autoMasterPrice = (product?.pricePerBox || 0) * (product?.boxesPerMaster || 0);
                                         const discountPercentage = autoMasterPrice > 0
                                             ? Math.round((1 - (product?.pricePerMaster || 0) / autoMasterPrice) * 100)
                                             : 0;
@@ -347,7 +339,7 @@ const ProductManagement = () => {
                                                             {product?.name}
                                                         </div>
                                                         <div className="text-sm text-gray-500 dark:text-gray-400">
-                                                            . {product?.unitPrice}/= 1x{product?.boxesPerMaster} {product?.piecesPerBox}.P RP.{product?.pricePerBox}
+                                                            Unit: Rs.{product?.unitPrice} | {product?.boxesPerMaster} boxes/master
                                                         </div>
                                                     </div>
                                                 </td>
@@ -475,7 +467,7 @@ const ProductManagement = () => {
                                         />
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         {/* Unit Price */}
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Unit Price (Rs.) *</label>
@@ -493,6 +485,22 @@ const ProductManagement = () => {
 
                                         {/* Boxes per Master */}
                                         <div>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">1/2 per Master *</label>
+                                            <input
+                                                type="number"
+                                                name="halfMaster"
+                                                value={data?.halfMaster || ""}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-3 text-black dark:text-white bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                                min="1"
+                                                placeholder="2"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Boxes per Master *</label>
                                             <input
                                                 type="number"
@@ -506,17 +514,16 @@ const ProductManagement = () => {
                                             />
                                         </div>
 
-                                        {/* Pieces per Box */}
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pieces per Box *</label>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Stock *</label>
                                             <input
                                                 type="number"
-                                                name="piecesPerBox"
-                                                value={data?.piecesPerBox || ""}
+                                                name="stock"
+                                                value={data?.stock || ""}
                                                 onChange={handleChange}
-                                                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 text-black dark:text-white bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                                className="w-full px-4 py-3 text-black dark:text-white bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                                                 min="1"
-                                                placeholder="48"
+                                                placeholder="50"
                                                 required
                                             />
                                         </div>
@@ -526,16 +533,7 @@ const ProductManagement = () => {
                                         {/* Price per Box */}
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                Price per Box (Rs.)
-                                                <span
-                                                    onClick={() => setData(prev => ({
-                                                        ...prev,
-                                                        pricePerBox: calculated?.autoPriceperBox?.toString()
-                                                    }))}
-                                                    className="text-xs text-blue-600 dark:text-blue-400 ml-2 font-normal cursor-pointer hover:underline"
-                                                >
-                                                    Auto: Rs. {calculated?.autoPriceperBox?.toFixed(2)}
-                                                </span>
+                                                Price per Box
                                             </label>
                                             <input
                                                 type="number"
@@ -544,7 +542,7 @@ const ProductManagement = () => {
                                                 onChange={handleChange}
                                                 className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 text-black dark:text-white bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                                                 min="0"
-                                                placeholder={calculated?.autoPriceperBox?.toFixed(2)}
+                                                placeholder={"240"}
                                             />
                                         </div>
 
@@ -590,17 +588,9 @@ const ProductManagement = () => {
                                             <div className="font-medium text-right text-gray-600 dark:text-gray-400">Value</div>
                                             <div className="font-medium text-right text-gray-600 dark:text-gray-400">Result</div>
 
-                                            <div className="col-span-2 text-gray-600 dark:text-gray-300">Unit Price × Pieces per Box</div>
-                                            <div className="text-right text-gray-600 dark:text-gray-300">
-                                                Rs. {parseFloat(data?.unitPrice || 0)?.toFixed(2)} × {parseInt(data?.piecesPerBox || 0)}
-                                            </div>
-                                            <div className="text-right font-medium text-blue-600 dark:text-blue-400">
-                                                Rs. {calculated?.autoPriceperBox?.toFixed(2)}
-                                            </div>
-
                                             <div className="col-span-2 text-gray-600 dark:text-gray-300">Price per Box × Boxes per Master</div>
                                             <div className="text-right text-gray-600 dark:text-gray-300">
-                                                Rs. {parseFloat(data?.pricePerBox || calculated?.autoPriceperBox || 0)?.toFixed(2)} × {parseInt(data?.boxesPerMaster || 0)}
+                                                Rs. {parseFloat(data?.pricePerBox || 0)?.toFixed(2)} × {parseInt(data?.boxesPerMaster || 0)}
                                             </div>
                                             <div className="text-right font-medium text-indigo-600 dark:text-indigo-400">
                                                 Rs. {calculated?.autoPriceperMaster?.toFixed(2)}

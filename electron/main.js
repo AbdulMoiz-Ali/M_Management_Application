@@ -12,6 +12,7 @@ require('dotenv').config({
 
 const os = require('os');
 const LicenseChecker = require('./licenseChecker');
+const { autoUpdater } = require('electron-updater');
 // Data storage path
 const dataPath = path.join(app.getPath('userData'), 'todos.json');
 const configPath = path.join(app.getPath('userData'), 'config.json');
@@ -829,24 +830,24 @@ ipcMain.handle('export-data-product', async () => {
                 { header: 'Name', key: 'name', width: 30 },
                 { header: 'Unit Price (Rs)', key: 'unitPrice', width: 15 },
                 { header: 'Boxes per Master', key: 'boxesPerMaster', width: 18 },
-                { header: 'Pieces per Box', key: 'piecesPerBox', width: 15 },
+                // { header: 'Pieces per Box', key: 'piecesPerBox', width: 15 },
                 { header: 'Price per Box (Rs)', key: 'pricePerBox', width: 18 },
                 { header: 'Price per Master (Rs)', key: 'pricePerMaster', width: 20 },
                 { header: 'Discount %', key: 'discount', width: 15 }
             ];
 
             // Add rows with data
-            data?.products?.forEach(product => {
-                const autoMaster = product.unitPrice * product.piecesPerBox * product.boxesPerMaster;
-                const discount = autoMaster > 0
-                    ? Math.round((1 - product.pricePerMaster / autoMaster) * 100)
-                    : 0;
+            // data?.products?.forEach(product => {
+            //     const autoMaster = product.unitPrice * product.piecesPerBox * product.boxesPerMaster;
+            //     const discount = autoMaster > 0
+            //         ? Math.round((1 - product.pricePerMaster / autoMaster) * 100)
+            //         : 0;
 
-                worksheet.addRow({
-                    ...product,
-                    discount: discount
-                });
-            });
+            //     worksheet.addRow({
+            //         ...product,
+            //         discount: discount
+            //     });
+            // });
 
             // Apply styles to header row
             worksheet.getRow(1).eachCell(cell => {
@@ -1748,10 +1749,10 @@ function generateSalesInvoiceHTML(invoiceData, settings) {
 
             // Determine pack info based on unit type
             if (item.unit === 'MASTER') {
-                packInfo = `1=${product.boxesPerMaster}X${product.piecesPerBox}`;
+                packInfo = `1=${product.boxesPerMaster}X${product.unitPrice}`;
                 displayQuantity = item.quantity; // Masters
             } else if (item.unit === 'BOX') {
-                packInfo = `1X${product.piecesPerBox}`;
+                packInfo = `1X${product.unitPrice}`;
                 displayQuantity = item.quantity; // Boxes
             } else {
                 packInfo = '1'; // Individual pieces
@@ -2155,7 +2156,7 @@ function generatePurchaseInvoiceHTML(invoiceData, settings) {
         if (item.unit === 'MASTER') {
             packInfo = product ? `1=${product.boxesPerMaster || 24}X${product.piecesPerBox || 12}` : '1=24X12';
         } else if (item.unit === 'BOX') {
-            packInfo = product ? `1X${product.piecesPerBox || 12}` : '1X12';
+            packInfo = product ? `1X${product.unitPrice || 12}` : '1X12';
         } else if (item.unit === 'HALF') {
             packInfo = '1/2 Box';
         } else {
@@ -2940,10 +2941,9 @@ function createWindow() {
         titleBarStyle: 'default',
         show: false
     });
-
     // Load app
     // if (process.env.NODE_ENV === 'development') {
-    if (false) {
+    if (true) {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {
@@ -3017,7 +3017,10 @@ function createWindow() {
     Menu.setApplicationMenu(menu);
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    createWindow()
+    autoUpdater.checkForUpdatesAndNotify();
+});
 
 app.on('window-all-closed', async () => {
     if (process.platform !== 'darwin') {

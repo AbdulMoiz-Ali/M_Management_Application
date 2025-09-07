@@ -144,10 +144,10 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false, type = 's
 
             // Determine pack info based on unit type
             if (item.unit === 'MASTER') {
-                packInfo = `1=${product.boxesPerMaster}X${product.piecesPerBox}`;
+                packInfo = `1=${product.boxesPerMaster}X${product.unitPrice}`;
                 displayQuantity = item.quantity; // Masters
             } else if (item.unit === 'BOX') {
-                packInfo = `1X${product.piecesPerBox}`;
+                packInfo = `1X${product.unitPrice}`;
                 displayQuantity = item.quantity; // Boxes
             } else {
                 packInfo = '1'; // Individual pieces
@@ -525,10 +525,10 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false, type = 's
             let displayQuantity = item.quantity;
 
             if (item.unit === 'MASTER') {
-                packInfo = product ? `1=${product.boxesPerMaster || 24}X${product.piecesPerBox || 12}` : '1=24X12';
+                packInfo = product ? `1=${product.boxesPerMaster || 24}X${product.unitPrice || 12}` : '1=24X12';
                 displayQuantity = item.quantity;
             } else if (item.unit === 'BOX') {
-                packInfo = product ? `1X${product.piecesPerBox || 12}` : '1X12';
+                packInfo = product ? `1X${product.unitPrice || 12}` : '1X12';
                 displayQuantity = item.quantity;
             } else if (item.unit === 'HALF') {
                 packInfo = '1/2 Box';
