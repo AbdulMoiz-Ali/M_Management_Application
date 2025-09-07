@@ -480,6 +480,7 @@ async function clearAllData() {
         await saveProducts(defaultProducts);
         await saveCustomers(defaultCustomers);
         await saveInvoicesData(defaultInvoices);
+        await savePurchaseInvoicesData(defaultPurchaceInvoices);
         await saveToFile(settingsPath, {});
 
         return { success: true, message: 'All data cleared successfully' };
@@ -820,36 +821,36 @@ ipcMain.handle('export-data-product', async () => {
         });
 
         if (!result.canceled && result.filePath) {
-            // Create Excel workbook
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Products');
 
-            // Add headers
+            // Updated headers for new structure
             worksheet.columns = [
                 { header: 'ID', key: 'id', width: 10 },
                 { header: 'Name', key: 'name', width: 30 },
                 { header: 'Unit Price (Rs)', key: 'unitPrice', width: 15 },
+                { header: 'Stock', key: 'stock', width: 10 },
+                { header: 'Half per Master', key: 'halfMaster', width: 15 },
                 { header: 'Boxes per Master', key: 'boxesPerMaster', width: 18 },
-                // { header: 'Pieces per Box', key: 'piecesPerBox', width: 15 },
                 { header: 'Price per Box (Rs)', key: 'pricePerBox', width: 18 },
                 { header: 'Price per Master (Rs)', key: 'pricePerMaster', width: 20 },
                 { header: 'Discount %', key: 'discount', width: 15 }
             ];
 
-            // Add rows with data
-            // data?.products?.forEach(product => {
-            //     const autoMaster = product.unitPrice * product.piecesPerBox * product.boxesPerMaster;
-            //     const discount = autoMaster > 0
-            //         ? Math.round((1 - product.pricePerMaster / autoMaster) * 100)
-            //         : 0;
+            // Add rows with updated calculation
+            data?.products?.forEach(product => {
+                const autoMaster = product.pricePerBox * product.boxesPerMaster;
+                const discount = autoMaster > 0
+                    ? Math.round((1 - product.pricePerMaster / autoMaster) * 100)
+                    : 0;
 
-            //     worksheet.addRow({
-            //         ...product,
-            //         discount: discount
-            //     });
-            // });
+                worksheet.addRow({
+                    ...product,
+                    discount: discount
+                });
+            });
 
-            // Apply styles to header row
+            // Apply styles
             worksheet.getRow(1).eachCell(cell => {
                 cell.font = { bold: true };
                 cell.fill = {
@@ -859,12 +860,13 @@ ipcMain.handle('export-data-product', async () => {
                 };
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
             });
+
             worksheet.eachRow((row) => {
                 row.eachCell((cell) => {
                     cell.alignment = { vertical: 'middle', horizontal: 'center' };
                 });
             });
-            // Save the Excel file
+
             await workbook.xlsx.writeFile(result.filePath);
             return { success: true, path: result.filePath };
         }
@@ -1313,27 +1315,61 @@ ipcMain.handle('get-pending-invoices', async () => {
 
 ipcMain.handle('update-invoice-status', async (event, invoiceId, status) => {
     try {
-        const data = await loadInvoices();
-        const invoiceIndex = data.invoices.findIndex(inv => inv.id === invoiceId);
+        const invoiceData = await loadInvoices();
+        const productData = await loadProducts();
+
+        const invoiceIndex = invoiceData.invoices.findIndex(inv => inv.id === invoiceId);
 
         if (invoiceIndex === -1) {
             return { success: false, error: 'Invoice not found' };
         }
 
-        data.invoices[invoiceIndex].status = status;
-        data.invoices[invoiceIndex].updatedAt = new Date().toISOString();
+        const invoice = invoiceData.invoices[invoiceIndex];
 
-        const result = await saveInvoicesData(data);
+        invoice.status = status;
+        invoice.updatedAt = new Date().toISOString();
+
+        if (status === 'paid') {
+            for (const item of invoice.items) {
+                const productIndex = productData.products.findIndex(p => p.id === item.productId);
+                if (productIndex !== -1) {
+                    const product = productData.products[productIndex];
+                    let stockToDeduct = 0;
+                    if (item.unit === 'MASTER') {
+                        stockToDeduct = parseInt(item.quantity);
+                        product.stock = Math.max(0, (product.stock || 0) - stockToDeduct);
+                        product.updatedAt = new Date().toISOString();
+                        await saveProducts(productData);
+                    }
+                }
+            }
+        } else if (status === 'pending') {
+            for (const item of invoice.items) {
+                const productIndex = productData.products.findIndex(p => p.id === item.productId);
+                if (productIndex !== -1) {
+                    const product = productData.products[productIndex];
+                    let stockToAdd = 0;
+                    if (item.unit === 'MASTER') {
+                        stockToAdd = parseInt(item.quantity);
+                        product.stock = (product.stock || 0) + stockToAdd;
+                        product.updatedAt = new Date().toISOString();
+                        await saveProducts(productData);
+                    }
+                }
+            }
+
+        }
+
+        const result = await saveInvoicesData(invoiceData);
 
         if (result.success) {
-            return { success: true, data: data.invoices[invoiceIndex] };
+            return { success: true, data: invoice };
         }
         return result;
     } catch (error) {
         return { success: false, error: error.message };
     }
 });
-
 
 ipcMain.handle('export-invoices', async () => {
     try {
@@ -2616,7 +2652,8 @@ ipcMain.handle('import-data', async () => {
             // Save imported data
             if (importedData.products) await saveToFile(productsPath, importedData.products);
             if (importedData.customers) await saveToFile(customersPath, importedData.customers);
-            if (importedData.invoices) await saveToFile(invoicesPath, importedData.invoices);
+            if (importedData.invoices) await saveToFile(invoicesFilePath, importedData.invoices);
+            if (importedData.invoices) await saveToFile(purchaseInvoicesPath, importedData.purchaseInvoices);
             if (importedData.settings) await saveToFile(settingsPath, importedData.settings);
 
             return { success: true, message: 'Data imported successfully' };
@@ -2833,51 +2870,52 @@ ipcMain.handle('export-purchase-invoices', async () => {
         });
 
         if (!result.canceled && result.filePath) {
-            // Create Excel workbook
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Purchase Invoices');
 
-            // Add headers
+            // Updated headers according to actual data structure
             worksheet.columns = [
-                { header: 'Purchase Invoice ID', key: 'id', width: 20 },
-                { header: 'Purchase Invoice Number', key: 'purchaseInvoiceNumber', width: 20 },
+                { header: 'ID', key: 'id', width: 20 },
+                { header: 'Purchase Invoice No', key: 'purchaseInvoiceNumber', width: 25 },
                 { header: 'Date', key: 'date', width: 15 },
                 { header: 'Supplier Name', key: 'supplierName', width: 25 },
                 { header: 'Supplier Phone', key: 'supplierPhone', width: 15 },
-                { header: 'Supplier City', key: 'supplierCity', width: 15 },
-                { header: 'Received By', key: 'receivedBy', width: 20 },
-                { header: 'Purchase From', key: 'purchaseFrom', width: 20 },
+                { header: 'Supplier Address', key: 'supplierAddress', width: 25 },
+                { header: 'Previous Balance', key: 'previousBalance', width: 15 },
                 { header: 'Sub Total', key: 'subTotal', width: 15 },
-                { header: 'Discount Rate', key: 'discount', width: 12 },
+                { header: 'Discount %', key: 'discount', width: 12 },
                 { header: 'Discount Amount', key: 'discountAmount', width: 15 },
                 { header: 'Total Amount', key: 'total', width: 15 },
                 { header: 'Total Quantity', key: 'totalQuantity', width: 15 },
+                { header: 'Amount in Words', key: 'amountInWords', width: 30 },
                 { header: 'Status', key: 'status', width: 12 },
-                { header: 'Created At', key: 'createdAt', width: 20 }
+                { header: 'Created At', key: 'createdAt', width: 20 },
+                { header: 'Updated At', key: 'updatedAt', width: 20 }
             ];
 
-            // Add rows with purchase invoice data
-            data?.purchaseInvoices?.forEach(purchaseInvoice => {
+            // Add rows with corrected data mapping
+            data?.purchaseInvoices?.forEach(invoice => {
                 worksheet.addRow({
-                    id: purchaseInvoice.id,
-                    purchaseInvoiceNumber: purchaseInvoice.purchaseInvoiceNumber,
-                    date: purchaseInvoice.date,
-                    supplierName: purchaseInvoice.supplier.name,
-                    supplierPhone: purchaseInvoice.supplier.phone,
-                    supplierCity: purchaseInvoice.supplier.city,
-                    receivedBy: purchaseInvoice.receivedBy,
-                    purchaseFrom: purchaseInvoice.purchaseFrom,
-                    subTotal: purchaseInvoice.subTotal,
-                    discount: purchaseInvoice.discount,
-                    discountAmount: purchaseInvoice.discountAmount,
-                    total: purchaseInvoice.total,
-                    totalQuantity: purchaseInvoice.totalQuantity,
-                    status: purchaseInvoice.status,
-                    createdAt: purchaseInvoice.createdAt
+                    id: invoice.id,
+                    purchaseInvoiceNumber: invoice.purchaseInvoiceNumber,
+                    date: invoice.date,
+                    supplierName: invoice.supplier?.name || 'N/A',
+                    supplierPhone: invoice.supplier?.phone || 'N/A',
+                    supplierAddress: invoice.supplier?.address || 'N/A',
+                    previousBalance: invoice.supplier?.previousBalance || 0,
+                    subTotal: invoice.subTotal,
+                    discount: invoice.discount,
+                    discountAmount: invoice.discountAmount,
+                    total: invoice.total,
+                    totalQuantity: invoice.totalQuantity,
+                    amountInWords: invoice.amountInWords,
+                    status: invoice.status,
+                    createdAt: new Date(invoice.createdAt).toLocaleString(),
+                    updatedAt: new Date(invoice.updatedAt).toLocaleString()
                 });
             });
 
-            // Apply styles to header row
+            // Style header row
             worksheet.getRow(1).eachCell(cell => {
                 cell.font = { bold: true };
                 cell.fill = {
@@ -2895,7 +2933,6 @@ ipcMain.handle('export-purchase-invoices', async () => {
                 });
             });
 
-            // Save the Excel file
             await workbook.xlsx.writeFile(result.filePath);
             return { success: true, path: result.filePath };
         }
@@ -2943,7 +2980,7 @@ function createWindow() {
     });
     // Load app
     // if (process.env.NODE_ENV === 'development') {
-    if (true) {
+    if (false) {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {

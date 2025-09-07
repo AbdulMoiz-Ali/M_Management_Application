@@ -209,7 +209,7 @@ const InvoiceManagement = () => {
     const selectCustomer = (customer) => {
         setSelectedCustomer(customer);
 
-        // Form values set کریں
+        // Form values set
         setValue('customerName', customer?.name);
         setValue('customerPhone', customer?.phone);
         setValue('customerAddress', customer?.address);
@@ -217,7 +217,7 @@ const InvoiceManagement = () => {
         setValue('previousBalance', customer?.previousBalance);
         setValue('customerSearch', customer?.name);
 
-        // Dropdown hide کریں
+        // Dropdown hide
         setShowCustomerDropdown(false);
         setFilteredCustomers([]);
     };
@@ -237,9 +237,10 @@ const InvoiceManagement = () => {
             } else if (unit === 'BOX') {
                 rate = selectedProductForItem?.pricePerBox;
             } else if (unit === 'HALF') {
-                rate = selectedProductForItem?.pricePerBox;
-                const halfBoxes = (selectedProductForItem?.boxesPerMaster || 24) / 2;
-                const amount = rate * halfBoxes;
+                // rate = selectedProductForItem?.pricePerBox;
+                // const halfBoxes = (selectedProductForItem?.boxesPerMaster || 24) / 2;
+                // const amount = rate * halfBoxes;
+                const amount = selectedProductForItem?.pricePerMaster / 2;
                 setValue(`items.${index}.amount`, amount);
                 return;
             }

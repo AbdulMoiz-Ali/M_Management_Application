@@ -32,7 +32,7 @@ const ProductManagement = () => {
     const indexOfLastInvoice = currentPage * invoicesPerPage;
     const indexOfFirstInvoice = indexOfLastInvoice - invoicesPerPage;
 
-    // Initial form state
+    // Initial form state - with new fields
     const initialFormState = {
         name: "",
         unitPrice: "",
@@ -45,7 +45,6 @@ const ProductManagement = () => {
 
     const [data, setData] = useState(initialFormState);
     const [calculated, setCalculated] = useState({
-        autoPriceperBox: 0,
         autoPriceperMaster: 0,
     });
 
@@ -54,6 +53,7 @@ const ProductManagement = () => {
         setFilteredProducts(products);
     }, [products]);
 
+    // Calculate whenever relevant fields change
     useEffect(() => {
         const pricePerBox = parseFloat(data?.pricePerBox) || 0;
         const boxesPerMaster = parseInt(data?.boxesPerMaster) || 0;
@@ -63,15 +63,20 @@ const ProductManagement = () => {
         setCalculated({
             autoPriceperMaster: autoMasterPrice
         });
-    }, [data?.pricePerBox, data?.boxesPerMaster]);
 
+        // Auto-fill if field is empty
+        if (!data?.pricePerMaster) {
+            setData(prev => ({ ...prev, pricePerMaster: autoMasterPrice.toString() }));
+        }
+    }, [data?.pricePerBox, data?.boxesPerMaster]);
 
     // Stats calculation
     const stats = {
         total: products?.length || 0,
         averagePrice: products?.length > 0 ?
             products?.reduce((sum, product) => sum + (product?.unitPrice || 0), 0) / products?.length : 0,
-        totalValue: products?.reduce((sum, product) => sum + (product?.pricePerMaster || 0), 0) || 0
+        totalValue: products?.reduce((sum, product) => sum + (product?.pricePerMaster || 0), 0) || 0,
+        totalStock: products?.reduce((sum, product) => sum + (product?.stock || 0), 0) || 0
     };
 
     // Filter products based on search
@@ -255,7 +260,7 @@ const ProductManagement = () => {
 
                 {/* Stats Cards */}
                 {showStats && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur p-6 rounded-2xl shadow-lg border border-white/50 dark:border-gray-700/50 hover:shadow-xl transition-all duration-300">
                             <div className="flex items-center">
                                 <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50 rounded-xl mr-4">
@@ -263,7 +268,7 @@ const ProductManagement = () => {
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total Products</p>
-                                    <p className="text-3xl font-bold text-gray-900 dark:text-white  overflow-x-auto whitespace-nowrap max-w-[90%]">{stats?.total}</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.total}</p>
                                 </div>
                             </div>
                         </div>
@@ -274,7 +279,7 @@ const ProductManagement = () => {
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Avg. Unit Price</p>
-                                    <p className="text-3xl font-bold text-gray-900 dark:text-white  overflow-x-auto whitespace-nowrap max-w-[90%]">Rs. {stats?.averagePrice?.toFixed(2)}</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">Rs. {stats?.averagePrice?.toFixed(2)}</p>
                                 </div>
                             </div>
                         </div>
@@ -285,7 +290,18 @@ const ProductManagement = () => {
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total Value</p>
-                                    <p className="text-3xl font-bold text-gray-900 dark:text-white  overflow-x-auto whitespace-nowrap max-w-[90%]">Rs. {stats?.totalValue?.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">Rs. {stats?.totalValue?.toLocaleString()}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur p-6 rounded-2xl shadow-lg border border-white/50 dark:border-gray-700/50 hover:shadow-xl transition-all duration-300">
+                            <div className="flex items-center">
+                                <div className="p-3 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/50 dark:to-orange-800/50 rounded-xl mr-4">
+                                    <Package size={24} className="text-orange-600 dark:text-orange-400" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total Stock</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.totalStock}</p>
                                 </div>
                             </div>
                         </div>
@@ -313,13 +329,13 @@ const ProductManagement = () => {
                             <table className="min-w-full">
                                 <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700">
                                     <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Sr.</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Product</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Unit Price</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Price/Box</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Price/Master</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Discount</th>
-                                        <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Sr.</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Product</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Stock</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Unit Price</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Price/Box</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Price/Master</th>
+                                        <th className="px-4 py-4 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -330,57 +346,67 @@ const ProductManagement = () => {
                                             : 0;
                                         return (
                                             <tr key={product?.id} className="hover:bg-blue-50/50 dark:hover:bg-gray-700/50 transition-colors duration-200">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-medium">
+                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-medium">
                                                     {index + 1}
                                                 </td>
-                                                <td className="px-6 py-4 align-top">
+                                                <td className="px-4 py-4">
                                                     <div className="flex flex-col gap-0">
-                                                        <div className="font-semibold text-gray-900 dark:text-white text-lg">
+                                                        <div className="font-semibold text-gray-900 dark:text-white text-base">
                                                             {product?.name}
                                                         </div>
-                                                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                                                            Unit: Rs.{product?.unitPrice} | {product?.boxesPerMaster} boxes/master
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {product?.boxesPerMaster} boxes/master • {product?.halfMaster} half/master
                                                         </div>
                                                     </div>
                                                 </td>
-
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200">
+                                                <td className="px-4 py-4 whitespace-nowrap">
+                                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                                        (product?.stock || 0) <= 10 
+                                                            ? 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200' 
+                                                            : (product?.stock || 0) <= 25 
+                                                            ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200'
+                                                            : 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200'
+                                                    }`}>
+                                                        {product?.stock} units
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-4 whitespace-nowrap">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200">
                                                         Rs. {product?.unitPrice?.toFixed(2)}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200">
+                                                <td className="px-4 py-4 whitespace-nowrap">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200">
                                                         Rs. {product?.pricePerBox?.toFixed(2)}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200">
-                                                        Rs. {product?.pricePerMaster?.toLocaleString()}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    {discountPercentage > 0 && (
-                                                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200">
-                                                            {discountPercentage}% OFF
+                                                <td className="px-4 py-4 whitespace-nowrap">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <span className="w-fit items-center px-4 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200">
+                                                            Rs. {product?.pricePerMaster?.toLocaleString()}
                                                         </span>
-                                                    )}
+                                                        {discountPercentage > 0 && (
+                                                            <span className="w-fit items-center px-4 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200">
+                                                                {discountPercentage}% OFF
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right whitespace-nowrap">
-                                                    <div className="flex justify-end space-x-2">
+                                                <td className="px-4 py-4 text-right whitespace-nowrap">
+                                                    <div className="flex justify-end space-x-1">
                                                         <button
                                                             onClick={() => handleEdit(product)}
                                                             className="p-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition-all duration-200"
                                                             title="Edit Product"
                                                         >
-                                                            <Edit2 size={16} />
+                                                            <Edit2 size={14} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleDelete(product)}
                                                             className="p-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-lg transition-all duration-200"
                                                             title="Delete Product"
                                                         >
-                                                            <Trash2 size={16} />
+                                                            <Trash2 size={14} />
                                                         </button>
                                                     </div>
                                                 </td>
@@ -435,7 +461,7 @@ const ProductManagement = () => {
                             resetForm();
                         }}></div>
 
-                        <div className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-2xl transform transition-all sm:max-w-3xl sm:w-full border border-white/20 dark:border-gray-700/20">
+                        <div className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-2xl transform transition-all sm:max-w-4xl sm:w-full border border-white/20 dark:border-gray-700/20">
                             <div className="px-8 pt-6 pb-4">
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
@@ -452,7 +478,7 @@ const ProductManagement = () => {
                                     </button>
                                 </div>
 
-                                <form onSubmit={handleSubmit} className="space-y-6">
+                                <form onSubmit={handleSubmit} className="space-y-4">
                                     {/* Product Name */}
                                     <div>
                                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Product Name *</label>
@@ -467,8 +493,8 @@ const ProductManagement = () => {
                                         />
                                     </div>
 
+                                    {/* First Row: Unit Price, Half per Master */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {/* Unit Price */}
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Unit Price (Rs.) *</label>
                                             <input
@@ -478,14 +504,13 @@ const ProductManagement = () => {
                                                 onChange={handleChange}
                                                 className="w-full px-4 py-3 text-black dark:text-white bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                                                 min="0"
-                                                placeholder="0"
+                                                step="0.01"
+                                                placeholder="5.00"
                                                 required
                                             />
                                         </div>
-
-                                        {/* Boxes per Master */}
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">1/2 per Master *</label>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Half per Master *</label>
                                             <input
                                                 type="number"
                                                 name="halfMaster"
@@ -499,6 +524,7 @@ const ProductManagement = () => {
                                         </div>
                                     </div>
 
+                                    {/* Second Row: Boxes per Master, Stock */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Boxes per Master *</label>
@@ -513,28 +539,25 @@ const ProductManagement = () => {
                                                 required
                                             />
                                         </div>
-
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Stock *</label>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Stock (Units) *</label>
                                             <input
                                                 type="number"
                                                 name="stock"
                                                 value={data?.stock || ""}
                                                 onChange={handleChange}
                                                 className="w-full px-4 py-3 text-black dark:text-white bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                                                min="1"
+                                                min="0"
                                                 placeholder="50"
                                                 required
                                             />
                                         </div>
                                     </div>
 
+                                    {/* Third Row: Price per Box, Price per Master */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {/* Price per Box */}
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                Price per Box
-                                            </label>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Price per Box (Rs.) *</label>
                                             <input
                                                 type="number"
                                                 name="pricePerBox"
@@ -542,11 +565,11 @@ const ProductManagement = () => {
                                                 onChange={handleChange}
                                                 className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 text-black dark:text-white bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                                                 min="0"
-                                                placeholder={"240"}
+                                                step="0.01"
+                                                placeholder="240.00"
+                                                required
                                             />
                                         </div>
-
-                                        {/* Price per Master */}
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                                 Price per Master (Rs.)
@@ -567,20 +590,21 @@ const ProductManagement = () => {
                                                 onChange={handleChange}
                                                 className="w-full px-4 py-3 text-black dark:text-white border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                                                 min="0"
+                                                step="0.01"
                                                 placeholder={calculated?.autoPriceperMaster?.toFixed(2)}
                                             />
                                         </div>
                                     </div>
 
                                     {/* Calculation Preview */}
-                                    <div className="p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/50">
+                                    <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/50">
                                         <h4 className="font-semibold mb-3 gap-2 text-gray-800 dark:text-gray-200 flex items-center">
                                             <BarChart2 size={18} className="text-indigo-600 dark:text-indigo-400" />
                                             Price Calculation Preview
                                             {data?.pricePerMaster && calculated?.autoPriceperMaster > 0 && (
-                                                <p className="font-medium text-green-700 dark:text-green-400">
+                                                <span className="font-medium text-green-700 dark:text-green-400">
                                                     (Discount: {Math.round((1 - (data?.pricePerMaster || 0) / (calculated?.autoPriceperMaster || 1)) * 100)}% off)
-                                                </p>
+                                                </span>
                                             )}
                                         </h4>
                                         <div className="grid grid-cols-4 gap-4 text-sm">
@@ -599,7 +623,7 @@ const ProductManagement = () => {
                                     </div>
 
                                     {/* Form Buttons */}
-                                    <div className="flex justify-end space-x-4 pt-2">
+                                    <div className="flex justify-end space-x-4 ">
                                         <button
                                             type="button"
                                             onClick={() => {
