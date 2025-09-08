@@ -5,6 +5,7 @@ const puppeteer = require('puppeteer');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const ExcelJS = require('exceljs');
+const log = require('electron-log');
 // Specific path specify karein
 require('dotenv').config({
     path: path.join(__dirname, '.env')
@@ -1782,7 +1783,7 @@ function generateSalesInvoiceHTML(invoiceData, settings) {
             const product = item.product;
             let packInfo = '';
             let displayQuantity = item.quantity;
-        
+
             // Determine pack info based on unit type
             if (item.unit === 'MASTER') {
                 packInfo = `1=${product.boxesPerMaster}X${product.unitPrice}`;
@@ -1798,7 +1799,7 @@ function generateSalesInvoiceHTML(invoiceData, settings) {
                 packInfo = '1'; // Individual pieces
                 displayQuantity = item.quantity;
             }
-        
+
             return {
                 ...item,
                 packInfo,
@@ -3061,7 +3062,20 @@ function createWindow() {
 
 app.whenReady().then(() => {
     createWindow()
+    // Setup auto-updater
+    autoUpdater.logger = log;
+    autoUpdater.logger.transports.file.level = "info";
+
     autoUpdater.checkForUpdatesAndNotify();
+
+    autoUpdater.on("update-available", () => {
+        log.info("Update available. Downloading...");
+    });
+
+    autoUpdater.on("update-downloaded", () => {
+        log.info("Update downloaded. Installing...");
+        autoUpdater.quitAndInstall();
+    });
 });
 
 app.on('window-all-closed', async () => {
