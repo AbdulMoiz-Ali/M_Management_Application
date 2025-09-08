@@ -197,11 +197,8 @@ const PurchaseInvoice = () => {
             } else if (unit === 'BOX') {
                 rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
             } else if (unit === 'HALF') {
-                rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
-                const halfBoxes = (selectedProductForItem?.boxesPerMaster || 24) / 2;
-                const amount = rate * halfBoxes;
-                setValue(`items.${index}.amount`, amount);
-                return;
+                // Dozen: Set rate as half of purchase master price
+                rate = (selectedProductForItem?.purchasePricePerMaster || selectedProductForItem?.pricePerMaster) / 2;
             }
 
             setValue(`items.${index}.rate`, rate);
@@ -409,7 +406,7 @@ const PurchaseInvoice = () => {
                 rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
                 quantity = 1;
             } else if (newUnit === 'HALF') {
-                rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
+                rate = (selectedProductForItem?.purchasePricePerMaster || selectedProductForItem?.pricePerMaster) / 2;
                 quantity = 1;
             }
 
@@ -1020,7 +1017,6 @@ const PurchaseInvoice = () => {
                                                             required: 'Quantity is required',
                                                             min: { value: 0, message: 'Minimum quantity is 1' }
                                                         })}
-                                                        disabled={watchedItems?.[index]?.unit === 'HALF'}
                                                         className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400"
                                                         onChange={(e) => {
                                                             setValue(`items.${index}.quantity`, e?.target?.value);

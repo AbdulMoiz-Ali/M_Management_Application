@@ -240,9 +240,10 @@ const InvoiceManagement = () => {
                 // rate = selectedProductForItem?.pricePerBox;
                 // const halfBoxes = (selectedProductForItem?.boxesPerMaster || 24) / 2;
                 // const amount = rate * halfBoxes;
-                const amount = selectedProductForItem?.pricePerMaster / 2;
-                setValue(`items.${index}.amount`, amount);
-                return;
+                // const amount = selectedProductForItem?.pricePerMaster / 2;
+                // setValue(`items.${index}.amount`, amount);
+                // return;
+                rate = selectedProductForItem?.pricePerMaster / 2;
             }
 
             setValue(`items.${index}.rate`, rate);
@@ -1238,7 +1239,6 @@ const InvoiceManagement = () => {
                                                             required: 'Quantity is required',
                                                             min: { value: 0, message: 'Minimum quantity is 1' }
                                                         })}
-                                                        disabled={watchedItems?.[index]?.unit === 'HALF'}
                                                         className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                                                         onChange={(e) => {
                                                             setValue(`items.${index}.quantity`, e?.target?.value);

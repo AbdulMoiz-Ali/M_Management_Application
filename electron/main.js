@@ -1778,11 +1778,11 @@ function generateSalesInvoiceHTML(invoiceData, settings) {
     try {
         // console.log('Generating HTML for invoice:', invoiceData?.invoiceNumber);
         // Process items for display
-        const processedItems = invoiceData?.items?.map(item => {
+        const processedItems = invoiceData.items.map(item => {
             const product = item.product;
             let packInfo = '';
             let displayQuantity = item.quantity;
-
+        
             // Determine pack info based on unit type
             if (item.unit === 'MASTER') {
                 packInfo = `1=${product.boxesPerMaster}X${product.unitPrice}`;
@@ -1790,16 +1790,20 @@ function generateSalesInvoiceHTML(invoiceData, settings) {
             } else if (item.unit === 'BOX') {
                 packInfo = `1X${product.unitPrice}`;
                 displayQuantity = item.quantity; // Boxes
+            } else if (item.unit === 'HALF') {
+                // UPDATED: Show proper pack info for Dozen
+                packInfo = `1X${product.unitPrice || 12}`;
+                displayQuantity = item.quantity; // Dozen quantity
             } else {
                 packInfo = '1'; // Individual pieces
                 displayQuantity = item.quantity;
             }
-
+        
             return {
                 ...item,
                 packInfo,
                 displayQuantity,
-                netPrice: item.amount // Net Price same as amount for this format
+                netPrice: item.amount
             };
         });
 
@@ -2050,7 +2054,7 @@ function generateSalesInvoiceHTML(invoiceData, settings) {
             } else if (item.unit === 'BOX') {
                 boxQty = item.quantity;
             } else if (item.unit === 'HALF') {
-                halfQty = '1/2';
+                halfQty = item.quantity;
             }
 
             return `
@@ -2075,12 +2079,13 @@ function generateSalesInvoiceHTML(invoiceData, settings) {
                     .reduce((sum, item) => sum + Number(item?.quantity || 0), 0);
                 const box = processedItems.filter(item => item.unit === 'BOX')
                     .reduce((sum, item) => sum + Number(item?.quantity || 0), 0);
-                const half = processedItems.filter(item => item.unit === 'HALF').length;
+                const half = processedItems.filter(item => item.unit === 'HALF')
+                    .reduce((sum, item) => sum + Number(item?.quantity || 0), 0);
                 const totalUnits = [master, box, half].filter(val => val > 0).length;
                 return totalUnits > 1 ? master + box + half : "";
             })()}</strong></td>
             <td class="qty-col"><strong>${processedItems.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item?.quantity || 0), 0) || ''}</strong></td>
-            <td class="qty-col"><strong>${processedItems.filter(item => item.unit === 'HALF').length || ''}</strong></td>
+            <td class="qty-col"><strong>${processedItems.filter(item => item.unit === 'HALF').reduce((sum, item) => sum + Number(item?.quantity || 0), 0) || ''}</strong></td>
             <td class="qty-col"><strong>${processedItems.filter(item => item.unit === 'BOX').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || ''}</strong></td>
             <td></td>
             <td><strong>${invoiceData?.discountAmount}</strong></td>
