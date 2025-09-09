@@ -198,7 +198,7 @@ const PurchaseInvoice = () => {
                 rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
             } else if (unit === 'HALF') {
                 // Dozen: Set rate as half of purchase master price
-                rate = (selectedProductForItem?.purchasePricePerMaster || selectedProductForItem?.pricePerMaster) / 2;
+                rate = selectedProductForItem?.purchasePricePerDozen || selectedProductForItem?.pricePerDozen;
             }
 
             setValue(`items.${index}.rate`, rate);
@@ -406,7 +406,7 @@ const PurchaseInvoice = () => {
                 rate = selectedProductForItem?.purchasePricePerBox || selectedProductForItem?.pricePerBox;
                 quantity = 1;
             } else if (newUnit === 'HALF') {
-                rate = (selectedProductForItem?.purchasePricePerMaster || selectedProductForItem?.pricePerMaster) / 2;
+                rate = selectedProductForItem?.purchasePricePerDozen || selectedProductForItem?.pricePerDozen;
                 quantity = 1;
             }
 
@@ -433,8 +433,10 @@ const PurchaseInvoice = () => {
                 id: item?.productId,
                 name: item?.name,
                 purchasePricePerMaster: item?.rate,
+                purchasePricePerDozen: item?.rate,
                 purchasePricePerBox: item?.rate,
                 pricePerMaster: item?.rate,
+                pricePerDozen: item?.rate,
                 pricePerBox: item?.rate
             });
             setSelectedProduct(products);
@@ -1000,7 +1002,7 @@ const PurchaseInvoice = () => {
                                                                     >
                                                                         <div className="font-medium text-gray-900 dark:text-gray-200">{product?.name}</div>
                                                                         <div className="text-xs text-gray-600 dark:text-gray-200/50">
-                                                                            Purchase - Master: {product?.purchasePricePerMaster || product?.pricePerMaster} | Box: {product?.purchasePricePerBox || product?.pricePerBox}
+                                                                            Purchase - Master: {product?.purchasePricePerMaster || product?.pricePerMaster} | Box: {product?.purchasePricePerBox || product?.pricePerBox}  | Dozen: {product?.purchasePricePerDozen || product?.pricePerDozen}
                                                                         </div>
                                                                     </div>
                                                                 ))}

@@ -151,7 +151,7 @@ const SmartPrintInvoice = ({ onback, selectedInvoice, preview = false, type = 's
                 displayQuantity = item.quantity; // Boxes
             } else if (item.unit === 'HALF') {
                 // UPDATED: Show proper pack info for Dozen
-                packInfo = `1X${product.unitPrice || 12}`;
+                packInfo = `Dozen`;
                 displayQuantity = item.quantity; // Dozen quantity
             } else {
                 packInfo = '1'; // Individual pieces

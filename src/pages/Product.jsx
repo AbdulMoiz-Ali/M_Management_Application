@@ -41,14 +41,16 @@ const ProductManagement = () => {
         halfMaster: "",
         pricePerBox: "",
         pricePerMaster: "",
+        pricePerDozen: "",
     };
 
     const [data, setData] = useState(initialFormState);
     const [calculated, setCalculated] = useState({
         autoPriceperMaster: 0,
+        autoPriceperDozen: 0,
     });
 
-    // Initialize filtered products
+    // Initialize filtered products 
     useEffect(() => {
         setFilteredProducts(products);
     }, [products]);
@@ -60,15 +62,33 @@ const ProductManagement = () => {
 
         const autoMasterPrice = pricePerBox * boxesPerMaster;
 
-        setCalculated({
+        // Fix: Use spread operator to preserve autoPriceperDozen
+        setCalculated(prev => ({
+            ...prev,
             autoPriceperMaster: autoMasterPrice
-        });
+        }));
 
         // Auto-fill if field is empty
         if (!data?.pricePerMaster) {
             setData(prev => ({ ...prev, pricePerMaster: autoMasterPrice.toString() }));
         }
     }, [data?.pricePerBox, data?.boxesPerMaster]);
+
+    useEffect(() => {
+        const pricePerMaster = parseFloat(data?.pricePerMaster) || 0; // Fix: parseFloat instead of parseInt
+        const autoDozenPrice = pricePerMaster / 2;
+
+        // Fix: Use spread operator to preserve autoPriceperMaster
+        setCalculated(prev => ({
+            ...prev,
+            autoPriceperDozen: autoDozenPrice
+        }));
+
+        // Auto-fill if field is empty
+        if (!data?.pricePerDozen) {
+            setData(prev => ({ ...prev, pricePerDozen: autoDozenPrice.toString() }));
+        }
+    }, [data?.pricePerMaster]);
 
     // Stats calculation
     const stats = {
@@ -112,7 +132,8 @@ const ProductManagement = () => {
             stock: parseInt(data?.stock || 0),
             pricePerBox: parseFloat(data?.pricePerBox || 0),
             halfMaster: parseFloat(data?.halfMaster || 0),
-            pricePerMaster: parseFloat(data?.pricePerMaster || 0)
+            pricePerMaster: parseFloat(data?.pricePerMaster || 0),
+            pricePerDozen: parseFloat(data?.pricePerDozen || 0)
         };
 
         let result;
@@ -139,7 +160,8 @@ const ProductManagement = () => {
             stock: product?.stock?.toString() || "",
             pricePerBox: product?.pricePerBox?.toString() || "",
             halfMaster: product?.halfMaster?.toString() || "",
-            pricePerMaster: product?.pricePerMaster?.toString() || ""
+            pricePerMaster: product?.pricePerMaster?.toString() || "",
+            pricePerDozen: product?.pricePerDozen?.toString() || ""
         });
         setShowModal(true);
     };
@@ -334,6 +356,7 @@ const ProductManagement = () => {
                                         <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Stock</th>
                                         <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Unit Price</th>
                                         <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Price/Box</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Price/Dozen</th>
                                         <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Price/Master</th>
                                         <th className="px-4 py-4 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                                     </tr>
@@ -360,13 +383,12 @@ const ProductManagement = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4 whitespace-nowrap">
-                                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                                        (product?.stock || 0) <= 10 
-                                                            ? 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200' 
-                                                            : (product?.stock || 0) <= 25 
+                                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${(product?.stock || 0) <= 10
+                                                        ? 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200'
+                                                        : (product?.stock || 0) <= 25
                                                             ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-200'
                                                             : 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200'
-                                                    }`}>
+                                                        }`}>
                                                         {product?.stock} units
                                                     </span>
                                                 </td>
@@ -378,6 +400,11 @@ const ProductManagement = () => {
                                                 <td className="px-4 py-4 whitespace-nowrap">
                                                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200">
                                                         Rs. {product?.pricePerBox?.toFixed(2)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-4 whitespace-nowrap">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200">
+                                                        Rs. {product?.pricePerDozen?.toFixed(2)}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-4 whitespace-nowrap">
@@ -479,22 +506,23 @@ const ProductManagement = () => {
                                 </div>
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
-                                    {/* Product Name */}
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Product Name *</label>
-                                        <input
-                                            type="text"
-                                            name="name"
-                                            value={data?.name || ""}
-                                            onChange={handleChange}
-                                            className="w-full px-4 py-3 border text-black dark:text-white bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                                            placeholder="Enter product name"
-                                            required
-                                        />
-                                    </div>
-
-                                    {/* First Row: Unit Price, Half per Master */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Product Name */}
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Product Name *</label>
+                                            <input
+                                                type="text"
+                                                name="name"
+                                                value={data?.name || ""}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-3 border text-black dark:text-white bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                                placeholder="Enter product name"
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* First Row: Unit Price, Half per Master */}
+
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Unit Price (Rs.) *</label>
                                             <input
@@ -509,6 +537,9 @@ const ProductManagement = () => {
                                                 required
                                             />
                                         </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Half per Master *</label>
                                             <input
@@ -522,10 +553,8 @@ const ProductManagement = () => {
                                                 required
                                             />
                                         </div>
-                                    </div>
+                                        {/* Second Row: Boxes per Master, Stock */}
 
-                                    {/* Second Row: Boxes per Master, Stock */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Boxes per Master *</label>
                                             <input
@@ -539,6 +568,9 @@ const ProductManagement = () => {
                                                 required
                                             />
                                         </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Stock (Units) *</label>
                                             <input
@@ -552,10 +584,9 @@ const ProductManagement = () => {
                                                 required
                                             />
                                         </div>
-                                    </div>
 
-                                    {/* Third Row: Price per Box, Price per Master */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Third Row: Price per Box, Price per Master */}
+
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Price per Box (Rs.) *</label>
                                             <input
@@ -570,6 +601,8 @@ const ProductManagement = () => {
                                                 required
                                             />
                                         </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                                 Price per Master (Rs.)
@@ -592,6 +625,30 @@ const ProductManagement = () => {
                                                 min="0"
                                                 step="0.01"
                                                 placeholder={calculated?.autoPriceperMaster?.toFixed(2)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                                Price per Dozen (Rs.)
+                                                <span
+                                                    onClick={() => setData(prev => ({
+                                                        ...prev,
+                                                        pricePerDozen: calculated?.autoPriceperDozen?.toFixed(2)
+                                                    }))}
+                                                    className="text-xs text-blue-600 dark:text-blue-400 ml-2 font-normal cursor-pointer hover:underline"
+                                                >
+                                                    Auto: Rs. {calculated?.autoPriceperDozen?.toFixed(2)}
+                                                </span>
+                                            </label>
+                                            <input
+                                                type="number"
+                                                name="pricePerDozen"
+                                                value={data?.pricePerDozen || ""}
+                                                onChange={handleChange}
+                                                className="w-full px-4 py-3 text-black dark:text-white border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                                min="0"
+                                                step="0.01"
+                                                placeholder={calculated?.autoPriceperDozen?.toFixed(2)}
                                             />
                                         </div>
                                     </div>
@@ -644,11 +701,11 @@ const ProductManagement = () => {
                                 </form>
                             </div>
                         </div>
-                    </div>
-                </div>
+                    </div >
+                </div >
             )}
             <ConfirmDialog />
-        </div>
+        </div >
     )
 }
 

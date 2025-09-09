@@ -243,7 +243,7 @@ const InvoiceManagement = () => {
                 // const amount = selectedProductForItem?.pricePerMaster / 2;
                 // setValue(`items.${index}.amount`, amount);
                 // return;
-                rate = selectedProductForItem?.pricePerMaster / 2;
+                rate = selectedProductForItem?.pricePerDozen;
             }
 
             setValue(`items.${index}.rate`, rate);
@@ -464,7 +464,7 @@ const InvoiceManagement = () => {
                 rate = selectedProductForItem?.pricePerBox;
                 quantity = 1;
             } else if (newUnit === 'HALF') {
-                rate = selectedProductForItem?.pricePerBox;
+                rate = selectedProductForItem?.pricePerDozen;
                 quantity = 1;
             }
 
@@ -1222,7 +1222,7 @@ const InvoiceManagement = () => {
                                                                     >
                                                                         <div className="font-medium text-gray-900 dark:text-gray-200">{product?.name}</div>
                                                                         <div className="text-xs text-gray-600 dark:text-gray-200/50">
-                                                                            Master: {product?.pricePerMaster} | Box: {product?.pricePerBox}
+                                                                            Master: {product?.pricePerMaster} | Box: {product?.pricePerBox} | Dozen: {product?.pricePerDozen}
                                                                         </div>
                                                                     </div>
                                                                 ))}
