@@ -2967,6 +2967,17 @@ ipcMain.handle('print-purchase-invoice', async (event, purchaseInvoiceData) => {
     }
 });
 
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = "info";
+
+// Feed URL for private repo
+autoUpdater.setFeedURL({
+    provider: "github",
+    owner: "AbdulMoiz-Ali",
+    repo: "M_Management_Application",
+    private: true,
+    token: process.env.GH_TOKEN
+});
 
 function createWindow() {
     const mainWindow = new BrowserWindow({
@@ -2999,83 +3010,30 @@ function createWindow() {
         mainWindow.show();
     });
 
-    // Create application menu
-    const template = [
-        {
-            label: 'File',
-            submenu: [
-                {
-                    label: 'Export Data',
-                    click: () => mainWindow.webContents.send('export-data')
-                },
-                {
-                    label: 'Import Data',
-                    click: () => mainWindow.webContents.send('import-data')
-                },
-                { type: 'separator' },
-                {
-                    label: 'Logout',
-                    click: () => mainWindow.webContents.send('logout')
-                },
-                { type: 'separator' },
-                {
-                    label: 'Exit',
-                    click: () => app.quit()
-                }
-            ]
-        },
-        {
-            label: 'View',
-            submenu: [
-                { role: 'reload' },
-                { role: 'forceReload' },
-                { role: 'toggleDevTools' },
-                { type: 'separator' },
-                { role: 'resetZoom' },
-                { role: 'zoomIn' },
-                { role: 'zoomOut' },
-                { type: 'separator' },
-                { role: 'togglefullscreen' }
-            ]
-        },
-        {
-            label: 'Help',
-            submenu: [
-                {
-                    label: 'About',
-                    click: () => {
-                        dialog.showMessageBox(mainWindow, {
-                            type: 'info',
-                            title: 'About',
-                            message: 'Invoice Management System',
-                            detail: 'Version 1.0.0\nBuilt with Electron and React'
-                        });
-                    }
-                }
-            ]
-        }
-    ];
-
-    const menu = Menu.buildFromTemplate(template);
-    Menu.setApplicationMenu(menu);
 }
+
 
 app.whenReady().then(() => {
     createWindow()
-    // Setup auto-updater
-    autoUpdater.logger = log;
-    autoUpdater.logger.transports.file.level = "info";
-
     autoUpdater.checkForUpdatesAndNotify();
+});
 
-    autoUpdater.on("update-available", () => {
-        log.info("Update available. Downloading...");
-    });
-
-    autoUpdater.on("update-downloaded", () => {
-        log.info("Update downloaded. Installing...");
-        autoUpdater.quitAndInstall();
-    });
+// AutoUpdater Events
+autoUpdater.on("update-available", () => {
+    log.info("Update available!");
+});
+autoUpdater.on("update-not-available", () => {
+    log.info("No update available.");
+});
+autoUpdater.on("error", (err) => {
+    log.error("Update error:", err);
+});
+autoUpdater.on("download-progress", (progressObj) => {
+    log.info(`Downloaded ${Math.round(progressObj.percent)}%`);
+});
+autoUpdater.on("update-downloaded", () => {
+    log.info("Update downloaded, will install on restart");
+    autoUpdater.quitAndInstall();
 });
 
 app.on('window-all-closed', async () => {
