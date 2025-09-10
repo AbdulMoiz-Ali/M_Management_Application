@@ -1,6 +1,6 @@
 {
   "name": "management-desktop-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Offline Management Desktop Application",
   "main": "electron/main.js",
   "homepage": "./",
