@@ -2967,20 +2967,99 @@ ipcMain.handle('print-purchase-invoice', async (event, purchaseInvoiceData) => {
     }
 });
 
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 autoUpdater.logger = log;
-autoUpdater.logger.transports.file.level = "info";
+autoUpdater.logger.transports.file.level = 'info';
 
-// Feed URL for private repo
-autoUpdater.setFeedURL({
-    provider: "github",
-    owner: "AbdulMoiz-Ali",
-    repo: "M_Management_Application",
-    private: true,
-    token: process.env.GH_TOKEN
+
+let mainWindow;
+
+ipcMain.handle('get-current-version', async () => {
+    try {
+        return app.getVersion();
+    } catch (error) {
+        return '1.0.1';
+    }
 });
 
+ipcMain.handle('check-for-updates', async () => {
+    try {
+        const updateCheckResult = await autoUpdater.checkForUpdates();
+
+        if (updateCheckResult && updateCheckResult.updateInfo) {
+            const updateInfo = updateCheckResult.updateInfo;
+            const currentVersion = app.getVersion();
+
+            // Version comparison
+            if (isNewerVersion(currentVersion, updateInfo.version)) {
+                return {
+                    success: true,
+                    updateAvailable: true,
+                    updateInfo: {
+                        version: updateInfo.version,
+                        releaseNotes: updateInfo.releaseNotes || 'Bug fixes and improvements'
+                    }
+                };
+            }
+        }
+
+        return { success: true, updateAvailable: false };
+    } catch (error) {
+        return { success: false, error: 'Unable to check for updates. Check internet connection.' };
+    }
+});
+
+ipcMain.handle('download-update', async () => {
+    try {
+        autoUpdater.downloadUpdate();
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('install-update', async () => {
+    try {
+        autoUpdater.quitAndInstall(false, true);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Auto-updater events (add after your existing event handlers)
+autoUpdater.on('download-progress', (progressObj) => {
+    const progress = Math.round(progressObj.percent);
+
+    // Send to renderer
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('download-progress', progress);
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    console.log('Update downloaded');
+});
+
+autoUpdater.on('error', (error) => {
+    console.error('Auto-updater error:', error);
+});
+
+// Helper function
+function isNewerVersion(current, latest) {
+    const currentParts = current.replace('v', '').split('.').map(Number);
+    const latestParts = latest.replace('v', '').split('.').map(Number);
+
+    for (let i = 0; i < 3; i++) {
+        if (latestParts[i] > currentParts[i]) return true;
+        if (latestParts[i] < currentParts[i]) return false;
+    }
+    return false;
+}
+
 function createWindow() {
-    const mainWindow = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
         minWidth: 800,
@@ -3013,28 +3092,8 @@ function createWindow() {
 }
 
 
-app.whenReady().then(() => {
-    createWindow()
-    autoUpdater.checkForUpdatesAndNotify();
-});
+app.whenReady().then(createWindow);
 
-// AutoUpdater Events
-autoUpdater.on("update-available", () => {
-    log.info("Update available!");
-});
-autoUpdater.on("update-not-available", () => {
-    log.info("No update available.");
-});
-autoUpdater.on("error", (err) => {
-    log.error("Update error:", err);
-});
-autoUpdater.on("download-progress", (progressObj) => {
-    log.info(`Downloaded ${Math.round(progressObj.percent)}%`);
-});
-autoUpdater.on("update-downloaded", () => {
-    log.info("Update downloaded, will install on restart");
-    autoUpdater.quitAndInstall();
-});
 
 app.on('window-all-closed', async () => {
     if (process.platform !== 'darwin') {
