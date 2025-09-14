@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   TrendingUp,
@@ -15,6 +15,9 @@ import {
 import AlertBox from './AlertBox';
 import { useAuth } from '../hooks/useAuth';
 import Togglecolourmode from './Togglecolourmode';
+import { useUpdate } from '../hooks/useUpdate';
+import UpdateNotificationModal from './UpdateNotificationModal';
+import { UpdateNotificationBadge } from './UpdateNotificationBadge';
 
 const Layout = () => {
   const navigate = useNavigate();
@@ -24,6 +27,15 @@ const Layout = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const {
+    updateInfo,
+    showNotificationModal,
+    hasUpdateNotification,
+    handleUpdateNow,
+    handleUpdateLater,
+    setShowNotificationModal,
+    downloadUpdate
+  } = useUpdate();
 
   // Set active tab based on current route
   React.useEffect(() => {
@@ -60,6 +72,25 @@ const Layout = () => {
     showAlert('success', 'Logged out successfully');
   };
 
+  // Listen for navigation events from update system
+  useEffect(() => {
+    const handleNavigateToSettings = (event) => {
+      navigate('/settings');
+
+      // If auto-download requested, trigger download after navigation
+      if (event.detail?.autoDownload) {
+        setTimeout(() => {
+          downloadUpdate();
+        }, 1000);
+      }
+    };
+
+    window.addEventListener('navigate-to-update-settings', handleNavigateToSettings);
+    return () => {
+      window.removeEventListener('navigate-to-update-settings', handleNavigateToSettings);
+    };
+  }, [navigate, downloadUpdate]);
+
   const tabs = [
     { id: '', label: 'Dashboard', icon: TrendingUp },
     { id: 'customers', label: 'Customers', icon: Users },
@@ -73,6 +104,18 @@ const Layout = () => {
     <div className="flex flex-col min-h-screen dark:bg-gray-900 bg-gray-50">
       {/* Header */}
       <header className="sticky top-0 z-50 dark:bg-gray-800 bg-white border-b dark:border-gray-700 border-gray-200">
+
+        <UpdateNotificationModal
+          isOpen={showNotificationModal}
+          onClose={handleUpdateLater}
+          updateInfo={updateInfo}
+          onUpdate={handleUpdateNow}
+          onLater={handleUpdateLater}
+        />
+        <UpdateNotificationBadge
+          hasUpdate={hasUpdateNotification}
+          updateInfo={updateInfo}
+        />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top Bar */}
           <div className="flex justify-between items-center py-4">

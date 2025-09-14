@@ -14,7 +14,11 @@ import {
     Sun,
     Monitor,
     BadgeInfo,
-    FolderSync
+    FolderSync,
+    Download,
+    X,
+    RefreshCw,
+    Search
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import BasicForm from '../components/BasicForm';
@@ -22,10 +26,13 @@ import PasswordChangeForm from '../components/PasswordChangeForm';
 import ResetSoftware from '../components/ResetSoftware';
 import LoadingDemo from '../components/LoadingDemo';
 import { useUpdate } from '../hooks/useUpdate';
+import { useSearchParams } from 'react-router-dom';
 
 const Settings = () => {
     const { user, changePassword, changeUseremail, logout, basicInformation } = useAuth?.();
-    const [activeTab, setActiveTab] = useState('account');
+    const [searchParams] = useSearchParams();
+    const defaultTab = searchParams.get('tab') || 'account';
+    const [activeTab, setActiveTab] = useState(defaultTab);
     const [isEmail, setEmail] = useState({
         newemail: '',
         newpassword: '',
@@ -40,6 +47,7 @@ const Settings = () => {
         isChecking,
         isDownloading,
         downloadProgress,
+        isInstalling,
         error,
         clearError,
         currentVersion
@@ -212,7 +220,7 @@ const Settings = () => {
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-6 space-y-8">
+        <div className="max-w-6xl mx-auto p-6 space-y-8">
             {isGlobalLoading && (
                 <div className="fixed inset-0 z-50">
                     <LoadingDemo
@@ -549,134 +557,298 @@ const Settings = () => {
                     )}
 
                     {activeTab === 'updatesoftware' && (
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <h3 className="text-xl font-semibold mb-4 text-gray-800">
-                                🔄 Software Updates
-                            </h3>
+                        // <div className="bg-white rounded-lg shadow-md p-6">
+                        //     <h3 className="text-xl font-semibold mb-4 text-gray-800">
+                        //         🔄 Software Updates
+                        //     </h3>
 
-                            <div className="space-y-4">
-                                {/* Current Version Display */}
-                                <div className="flex justify-between items-center py-2 border-b">
-                                    <span className="text-gray-600 font-medium">Current Version:</span>
-                                    <span className="font-bold text-blue-600 text-lg">
-                                        v{currentVersion}
-                                    </span>
+                        //     <div className="space-y-4">
+                        //         {/* Current Version Display */}
+                        //         <div className="flex justify-between items-center py-2 border-b">
+                        //             <span className="text-gray-600 font-medium">Current Version:</span>
+                        //             <span className="font-bold text-blue-600 text-lg">
+                        //                 v{currentVersion}
+                        //             </span>
+                        //         </div>
+
+                        //         {/* Update Available Info */}
+                        //         {updateInfo && (
+                        //             <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded">
+                        //                 <div className="flex items-start">
+                        //                     <div className="flex-shrink-0">
+                        //                         <span className="text-green-600 text-xl">✨</span>
+                        //                     </div>
+                        //                     <div className="ml-3">
+                        //                         <h4 className="text-green-800 font-semibold">
+                        //                             New Version Available: v{updateInfo.version}
+                        //                         </h4>
+                        //                         <p className="text-green-700 text-sm mt-1">
+                        //                             {updateInfo.releaseNotes || 'New features and improvements available'}
+                        //                         </p>
+                        //                     </div>
+                        //                 </div>
+                        //             </div>
+                        //         )}
+
+                        //         {/* Error Display */}
+                        //         {error && (
+                        //             <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+                        //                 <div className="flex justify-between items-start">
+                        //                     <div className="flex">
+                        //                         <span className="text-red-600 text-xl mr-3">⚠️</span>
+                        //                         <div>
+                        //                             <h4 className="text-red-800 font-semibold">Update Error</h4>
+                        //                             <p className="text-red-700 text-sm">{error}</p>
+                        //                         </div>
+                        //                     </div>
+                        //                     <button
+                        //                         onClick={clearError}
+                        //                         className="text-red-600 hover:text-red-800 text-sm font-medium"
+                        //                     >
+                        //                         ✕
+                        //                     </button>
+                        //                 </div>
+                        //             </div>
+                        //         )}
+
+                        //         {/* Download Progress */}
+                        //         {isDownloading && (
+                        //             <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                        //                 <div className="flex items-center mb-2">
+                        //                     <span className="text-blue-600 text-xl mr-3">⬇️</span>
+                        //                     <h4 className="text-blue-800 font-semibold">
+                        //                         Downloading Update...
+                        //                     </h4>
+                        //                 </div>
+                        //                 <div className="w-full bg-blue-200 rounded-full h-3 mb-2">
+                        //                     <div
+                        //                         className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+                        //                         style={{ width: `${downloadProgress}%` }}
+                        //                     ></div>
+                        //                 </div>
+                        //                 <p className="text-blue-700 text-sm">
+                        //                     {Math.round(downloadProgress)}% completed
+                        //                 </p>
+                        //             </div>
+                        //         )}
+
+                        //         {/* Action Buttons */}
+                        //         <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                        //             {/* Check for Updates Button */}
+                        //             <button
+                        //                 onClick={checkForUpdates}
+                        //                 disabled={isChecking || isDownloading}
+                        //                 className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${isChecking || isDownloading
+                        //                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        //                     : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg'
+                        //                     }`}
+                        //             >
+                        //                 {isChecking ? (
+                        //                     <span className="flex items-center justify-center">
+                        //                         <span className="animate-spin mr-2">🔄</span>
+                        //                         Checking...
+                        //                     </span>
+                        //                 ) : (
+                        //                     '🔍 Check for Updates'
+                        //                 )}
+                        //             </button>
+
+                        //             {/* Download Button */}
+                        //             {updateInfo && !isDownloading && !updateInfo.downloaded && (
+                        //                 <button
+                        //                     onClick={downloadUpdate}
+                        //                     className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 hover:shadow-lg transition-all duration-200"
+                        //                 >
+                        //                     ⬇️ Download Update
+                        //                 </button>
+                        //             )}
+
+                        //             {/* Install Button */}
+                        //             {/* {updateInfo && updateInfo.downloaded && (
+                        //                 <button
+                        //                     onClick={installUpdate}
+                        //                     className="flex-1 px-6 py-3 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 hover:shadow-lg"
+                        //                 >
+                        //                     🚀 Install & Restart
+                        //                 </button>
+                        //             )} */}
+                        //             {updateInfo && updateInfo.downloaded && (
+                        //                 <button
+                        //                     onClick={installUpdate}
+                        //                     disabled={isInstalling}
+                        //                     className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${isInstalling
+                        //                         ? 'bg-gray-500 text-white cursor-not-allowed'
+                        //                         : 'bg-orange-600 text-white hover:bg-orange-700 hover:shadow-lg animate-pulse'
+                        //                         }`}
+                        //                 >
+                        //                     {isInstalling ? (
+                        //                         <span className="flex items-center justify-center">
+                        //                             <span className="animate-spin mr-2">⏳</span>
+                        //                             Installing...
+                        //                         </span>
+                        //                     ) : (
+                        //                         '🚀 Install & Restart'
+                        //                     )}
+                        //                 </button>
+                        //             )}
+                        //         </div>
+
+                        //         {/* Information Footer */}
+                        //         <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded border-t">
+                        //             <p className="mb-1">
+                        //                 <strong>💡 How it works:</strong> Click "Check for Updates" to manually search for new versions.
+                        //             </p>
+                        //             <p>
+                        //                 <strong>🔄 Manual Control:</strong> You decide when to download and install updates.
+                        //             </p>
+                        //         </div>
+                        //     </div>
+                        // </div>
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                    Software Updates
+                                </h3>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    Current Version: <span className="font-semibold text-blue-600">v{currentVersion}</span>
                                 </div>
+                            </div>
 
-                                {/* Update Available Info */}
-                                {updateInfo && (
-                                    <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded">
-                                        <div className="flex items-start">
-                                            <div className="flex-shrink-0">
-                                                <span className="text-green-600 text-xl">✨</span>
-                                            </div>
-                                            <div className="ml-3">
-                                                <h4 className="text-green-800 font-semibold">
-                                                    New Version Available: v{updateInfo.version}
-                                                </h4>
-                                                <p className="text-green-700 text-sm mt-1">
-                                                    {updateInfo.releaseNotes || 'New features and improvements available'}
-                                                </p>
+                            {/* Update Available Info */}
+                            {updateInfo && (
+                                <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/30 dark:to-blue-900/30 border border-green-200 dark:border-green-700 rounded-xl p-6">
+                                    <div className="flex items-start space-x-4">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
+                                                <Download className="w-6 h-6 text-white" />
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-
-                                {/* Error Display */}
-                                {error && (
-                                    <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex">
-                                                <span className="text-red-600 text-xl mr-3">⚠️</span>
-                                                <div>
-                                                    <h4 className="text-red-800 font-semibold">Update Error</h4>
-                                                    <p className="text-red-700 text-sm">{error}</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={clearError}
-                                                className="text-red-600 hover:text-red-800 text-sm font-medium"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Download Progress */}
-                                {isDownloading && (
-                                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
-                                        <div className="flex items-center mb-2">
-                                            <span className="text-blue-600 text-xl mr-3">⬇️</span>
-                                            <h4 className="text-blue-800 font-semibold">
-                                                Downloading Update...
+                                        <div className="flex-1">
+                                            <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                                                New Version Available: v{updateInfo.version}
                                             </h4>
+                                            <p className="text-gray-700 dark:text-gray-300 mb-4">
+                                                {updateInfo.releaseNotes || 'New features and improvements are ready to install'}
+                                            </p>
+                                            <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                                                <span>Upgrade from v{currentVersion} to v{updateInfo.version}</span>
+                                            </div>
                                         </div>
-                                        <div className="w-full bg-blue-200 rounded-full h-3 mb-2">
-                                            <div
-                                                className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
-                                                style={{ width: `${downloadProgress}%` }}
-                                            ></div>
-                                        </div>
-                                        <p className="text-blue-700 text-sm">
-                                            {Math.round(downloadProgress)}% completed
-                                        </p>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Error Display */}
+                            {error && (
+                                <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-start space-x-3">
+                                            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                                            <div>
+                                                <h4 className="font-medium text-red-800 dark:text-red-200">
+                                                    {error.includes('latest version') ? 'All Up to Date!' : 'Update Error'}
+                                                </h4>
+                                                <p className="text-red-700 dark:text-red-300 text-sm mt-1">{error}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={clearError}
+                                            className="text-red-500 hover:text-red-700 dark:hover:text-red-300"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Download Progress */}
+                            {isDownloading && (
+                                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                                    <div className="flex items-center space-x-3 mb-3">
+                                        <Download className="w-5 h-5 text-blue-500" />
+                                        <h4 className="font-medium text-blue-800 dark:text-blue-200">
+                                            Downloading Update...
+                                        </h4>
+                                    </div>
+                                    <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2 mb-2">
+                                        <div
+                                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                            style={{ width: `${downloadProgress}%` }}
+                                        ></div>
+                                    </div>
+                                    <p className="text-blue-700 dark:text-blue-300 text-sm">
+                                        {Math.round(downloadProgress)}% completed
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div className="flex space-x-4">
+                                <button
+                                    onClick={checkForUpdates}
+                                    disabled={isChecking || isDownloading || isInstalling}
+                                    className={`flex-1 flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${isChecking || isDownloading || isInstalling
+                                        ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg'
+                                        }`}
+                                >
+                                    {isChecking ? (
+                                        <>
+                                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                            <span>Checking...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Search className="w-4 h-4" />
+                                            <span>Check for Updates</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                {updateInfo && !isDownloading && !updateInfo.downloaded && (
+                                    <button
+                                        onClick={downloadUpdate}
+                                        className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 hover:shadow-lg transition-all duration-200"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        <span>Download Update</span>
+                                    </button>
                                 )}
 
-                                {/* Action Buttons */}
-                                <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                                    {/* Check for Updates Button */}
+                                {updateInfo && updateInfo.downloaded && (
                                     <button
-                                        onClick={checkForUpdates}
-                                        disabled={isChecking || isDownloading}
-                                        className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${isChecking || isDownloading
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg'
+                                        onClick={installUpdate}
+                                        disabled={isInstalling}
+                                        className={`flex-1 flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${isInstalling
+                                            ? 'bg-gray-500 text-white cursor-not-allowed'
+                                            : 'bg-orange-600 text-white hover:bg-orange-700 hover:shadow-lg'
                                             }`}
                                     >
-                                        {isChecking ? (
-                                            <span className="flex items-center justify-center">
-                                                <span className="animate-spin mr-2">🔄</span>
-                                                Checking...
-                                            </span>
+                                        {isInstalling ? (
+                                            <>
+                                                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                                <span>Installing...</span>
+                                            </>
                                         ) : (
-                                            '🔍 Check for Updates'
+                                            <>
+                                                <RefreshCw className="w-4 h-4" />
+                                                <span>Install & Restart</span>
+                                            </>
                                         )}
                                     </button>
+                                )}
+                            </div>
 
-                                    {/* Download Button */}
-                                    {updateInfo && !isDownloading && !updateInfo.downloaded && (
-                                        <button
-                                            onClick={downloadUpdate}
-                                            className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 hover:shadow-lg transition-all duration-200"
-                                        >
-                                            ⬇️ Download Update
-                                        </button>
-                                    )}
-
-                                    {/* Install Button */}
-                                    {updateInfo && updateInfo.downloaded && (
-                                        <button
-                                            onClick={installUpdate}
-                                            className="flex-1 px-6 py-3 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 hover:shadow-lg transition-all duration-200 animate-pulse"
-                                        >
-                                            🚀 Install & Restart
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Information Footer */}
-                                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded border-t">
-                                    <p className="mb-1">
-                                        <strong>💡 How it works:</strong> Click "Check for Updates" to manually search for new versions.
-                                    </p>
-                                    <p>
-                                        <strong>🔄 Manual Control:</strong> You decide when to download and install updates.
-                                    </p>
+                            {/* Info Footer */}
+                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                                <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                                    <p><strong>Automatic Check:</strong> The app checks for updates when you start it</p>
+                                    <p><strong>Manual Control:</strong> You decide when to download and install updates</p>
+                                    <p><strong>Safe Updates:</strong> Your data is preserved during the update process</p>
                                 </div>
                             </div>
                         </div>
+
                     )}
 
                 </div>

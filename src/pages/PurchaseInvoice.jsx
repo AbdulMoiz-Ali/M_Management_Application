@@ -604,13 +604,13 @@ const PurchaseInvoice = () => {
                                 </div>
                             </div>
                             <div className='flex gap-2 items-center'>
-                                <button
+                                {/* <button
                                     onClick={handleExportPurchaseInvoices}
                                     className="flex items-center px-4 py-2 bg-white/80 dark:bg-gray-700/80 backdrop-blur text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 dark:hover:bg-green-600 border border-gray-200 dark:border-gray-600 rounded-xl hover:shadow-md transition-all duration-200"
                                 >
                                     <Download size={18} className="mr-2" />
                                     <span className="font-medium">Export</span>
-                                </button>
+                                </button> */}
                                 <button
                                     onClick={handleNewPurchaseInvoice}
                                     className="flex items-center px-6 py-3 bg-green-500 dark:bg-green-600 text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-700 transition-colors shadow-lg"

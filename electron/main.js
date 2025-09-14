@@ -21,6 +21,7 @@ const productsPath = path.join(app.getPath('userData'), 'products.json');
 const customersPath = path.join(app.getPath('userData'), 'customers.json');
 const invoicesFilePath = path.join(app.getPath('userData'), 'invoices.json');
 const settingsPath = path.join(app.getPath('userData'), 'app-settings.json');
+const modalTrackingPath = path.join(app.getPath('userData'), 'modal-tracking.json');
 const purchaseInvoicesPath = path.join(app.getPath('userData'), 'purchaseInvoices.json');
 
 // Global variables
@@ -105,6 +106,8 @@ const defaultPurchaceInvoices = {
     purchaseInvoices: []
 };
 
+const defaultModalTracking = {};
+
 const defaultAppSettings = {
     theme: 'light',
     autoBackup: true,
@@ -188,6 +191,14 @@ async function loadPurchaseInvoices() {
 
 async function savePurchaseInvoicesData(invoices) {
     return await saveToFile(purchaseInvoicesPath, invoices);
+}
+
+async function loadModalTracking() {
+    return await loadFromFile(modalTrackingPath, defaultModalTracking);
+}
+
+async function saveModalTrackingData(data) {
+    return await saveToFile(modalTrackingPath, data);
 }
 
 //main.js for electron
@@ -474,6 +485,29 @@ process.on('SIGTERM', async () => {
 });
 
 //console.log('🚀 Offline License System Started - Default Mode: UNBLOCKED');
+
+
+ipcMain.handle('get-modal-tracking', async () => {
+    try {
+        const data = await loadModalTracking();
+        return data;
+    } catch (error) {
+        return {};
+    }
+});
+
+// Save modal tracking data
+ipcMain.handle('save-modal-tracking', async (event, trackingData) => {
+    try {
+        const result = await saveModalTrackingData(trackingData);
+        if (result) {
+            return { success: true };
+        }
+    } catch (error) {
+        console.error('Failed to save modal tracking:', error);
+        return { success: false, error: error.message };
+    }
+});
 
 
 async function clearAllData() {
@@ -2972,6 +3006,10 @@ autoUpdater.autoInstallOnAppQuit = false;
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 
+// process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';  // Only for testing
+autoUpdater.allowDowngrade = true;
+autoUpdater.allowPrerelease = false;
+
 
 let mainWindow;
 
@@ -3012,18 +3050,83 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('download-update', async () => {
     try {
-        autoUpdater.downloadUpdate();
-        return { success: true };
+        console.log('⬇️ Starting download...');
+        log.info('Starting download...');
+
+        // Start download
+        const downloadPromise = autoUpdater.downloadUpdate();
+
+        // Wait for download to complete or fail
+        return new Promise((resolve) => {
+            autoUpdater.once('update-downloaded', (info) => {
+                console.log('✅ Download completed successfully');
+                log.info('Download completed successfully', info);
+                resolve({ success: true, downloaded: true });
+            });
+
+            autoUpdater.once('error', (error) => {
+                console.error('❌ Download failed:', error);
+                log.error('Download failed:', error);
+                resolve({ success: false, error: error.message });
+            });
+
+            // Timeout after 5 minutes
+            setTimeout(() => {
+                console.log('⏰ Download timeout');
+                resolve({ success: false, error: 'Download timeout' });
+            }, 5 * 60 * 1000);
+        });
+
     } catch (error) {
+        console.error('❌ Download initiation failed:', error);
+        log.error('Download initiation failed:', error);
         return { success: false, error: error.message };
     }
 });
 
-ipcMain.handle('install-update', async () => {
+
+ipcMain.handle('install-update', async (event) => {
     try {
-        autoUpdater.quitAndInstall(false, true);
+        console.log('🚀 Install update requested by user');
+        log.info('Install update requested by user');
+
+        // Check if update is actually downloaded
+        if (!autoUpdater.downloadedUpdateHelper) {
+            console.log('❌ No update downloaded yet');
+            return { success: false, error: 'No update has been downloaded yet' };
+        }
+
+        console.log('✅ Update found, proceeding with installation...');
+        log.info('Update found, proceeding with installation...');
+
+        // Give user feedback before closing
+        if (mainWindow && mainWindow.webContents) {
+            mainWindow.webContents.send('install-starting');
+        }
+
+        // Wait a moment for UI feedback
+        setTimeout(() => {
+            console.log('🔄 Calling quitAndInstall...');
+            log.info('Calling quitAndInstall...');
+
+            // Try different quitAndInstall options
+            try {
+                autoUpdater.quitAndInstall(true, true); // Force close, restart after install
+            } catch (quitError) {
+                console.error('❌ quitAndInstall failed:', quitError);
+                log.error('quitAndInstall failed:', quitError);
+
+                // Alternative: Manual process
+                app.relaunch();
+                app.exit(0);
+            }
+        }, 1000);
+
         return { success: true };
+
     } catch (error) {
+        console.error('❌ Install error:', error);
+        log.error('Install error:', error);
         return { success: false, error: error.message };
     }
 });
@@ -3043,8 +3146,76 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 autoUpdater.on('error', (error) => {
-    console.error('Auto-updater error:', error);
+    console.error('AutoUpdater error:', error);
+    log.error('AutoUpdater error:', error);
+
+    // Check if it's a signature/code signing error
+    if (error.message.includes('not signed') ||
+        error.message.includes('publisherNames') ||
+        error.message.includes('digitally signed')) {
+
+        console.log('🔓 Code signing error detected, attempting alternative install...');
+        log.info('Code signing error detected, attempting alternative install');
+
+        // Try alternative install method
+        attemptAlternativeInstall();
+    }
+
+    // Send error to renderer
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('updater-error', {
+            type: 'signature-error',
+            message: 'Installation blocked by Windows security. Attempting alternative method...'
+        });
+    }
 });
+
+autoUpdater.on('checking-for-update', () => {
+    console.log('🔍 Checking for update...');
+    log.info('Checking for update...');
+});
+
+autoUpdater.on('update-available', (info) => {
+    console.log('✅ Update available:', info.version);
+    log.info('Update available:', info);
+});
+
+autoUpdater.on('update-not-available', (info) => {
+    console.log('ℹ️ Update not available');
+    log.info('Update not available:', info);
+});
+
+autoUpdater.on('error', (err) => {
+    console.error('❌ AutoUpdater error:', err);
+    log.error('AutoUpdater error:', err);
+
+    // Send error to renderer
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('updater-error', err.message);
+    }
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+    const progress = Math.round(progressObj.percent);
+    console.log(`📥 Download progress: ${progress}%`);
+    log.info(`Download progress: ${progress}%`);
+
+    // Send progress to renderer
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('download-progress', progress);
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    console.log('✅ Update downloaded successfully');
+    log.info('Update downloaded successfully:', info);
+
+    // Send to renderer
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('update-downloaded', info);
+    }
+});
+
 
 // Helper function
 function isNewerVersion(current, latest) {
