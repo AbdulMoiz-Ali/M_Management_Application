@@ -3186,7 +3186,7 @@ autoUpdater.on('update-not-available', (info) => {
 });
 
 autoUpdater.on('error', (err) => {
-    console.error('❌ AutoUpdater error:', err);
+    // console.error('❌ AutoUpdater error:', err);
     log.error('AutoUpdater error:', err);
 
     // Send error to renderer
@@ -3207,7 +3207,7 @@ autoUpdater.on('download-progress', (progressObj) => {
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-    console.log('✅ Update downloaded successfully');
+    // console.log('✅ Update downloaded successfully');
     log.info('Update downloaded successfully:', info);
 
     // Send to renderer
