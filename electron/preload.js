@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     printInvoice: (invoice, type) => ipcRenderer.invoke('super-fast-print', invoice, type),
     downloadInvoice: (invoice, type) => ipcRenderer.invoke('download-invoice-pdf-silent', invoice, type),
     openPrinterSettings: () => ipcRenderer.invoke('open-printer-settings'),
+    generateReportPDF: (htmlContent, options) => ipcRenderer.invoke('generate-report-pdf', htmlContent, options),
+    printReport: (htmlContent) => ipcRenderer.invoke('print-report', htmlContent),
 
     // PurchaseInvoice APIs
     loadPurchaseInvoices: () => ipcRenderer.invoke('load-purchase-invoices'),

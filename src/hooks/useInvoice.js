@@ -50,6 +50,32 @@ export function useInvoice() {
         }
     }, []);
 
+    const generateReportPDF = useCallback(async (htmlContent, options) => {
+        try {
+            setLoading(true);
+            setError(null);
+            const result = await invoiceStorage.generateReportPDF(htmlContent, options);
+            return result
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    const printReport = useCallback(async (htmlContent) => {
+        try {
+            setLoading(true);
+            setError(null);
+            const result = await invoiceStorage.printReport(htmlContent);
+            return result
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     // Save new invoice
     const saveInvoice = async (invoiceData) => {
         try {
@@ -353,6 +379,8 @@ export function useInvoice() {
         printerCheck,
         printInvoice,
         openPrinterSettings,
+        printReport,
+        generateReportPDF,
 
         // Utilities
         clearError,

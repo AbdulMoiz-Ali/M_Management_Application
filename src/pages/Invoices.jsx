@@ -13,6 +13,7 @@ import SmartPrintInvoice from '../components/SmartPrintInvoice';
 import Pagination from '../components/Pagination';
 import LoadingDemo from '../components/LoadingDemo';
 import useConfirmDialog from '../components/ConfirmationDialog';
+import InvoiceReportSystem from '../components/InvoiceReportSystem';
 
 const InvoiceManagement = () => {
     const {
@@ -57,14 +58,16 @@ const InvoiceManagement = () => {
     }, [loadInvoices]);
 
     const [currentView, setCurrentView] = useState('dashboard');
+    const [showReports, setShowReports] = useState(false);
 
     const handleExportInvoices = async () => {
-        const result = await exportInvoices?.();
-        if (result?.success) {
-            showAlert(`Invoices exported successfully to: ${result?.path}`, 'success');
-        } else {
-            showAlert(`Export failed: ${result?.error}`, 'error');
-        }
+        setShowReports(true)
+        // const result = await exportInvoices?.();
+        // if (result?.success) {
+        //     showAlert(`Invoices exported successfully to: ${result?.path}`, 'success');
+        // } else {
+        //     showAlert(`Export failed: ${result?.error}`, 'error');
+        // }
     };
 
     const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -691,7 +694,14 @@ const InvoiceManagement = () => {
             </div>
         );
     }
-
+    if (showReports) {
+        return (
+            <InvoiceReportSystem
+                invoices={allinvoice}
+                onBack={() => setShowReports(false)}
+            />
+        );
+    }
     // Dashboard View
     if (currentView === 'dashboard') {
         return (

@@ -42,6 +42,34 @@ class InvoiceStorage {
         }
     }
 
+
+    async generateReportPDF(htmlContent, options) {
+        try {
+            const result = await window.electronAPI.generateReportPDF(htmlContent, options);
+            if (result.success) {
+                return { success: true, data: result.path };
+            }
+            throw new Error(result.error);
+        } catch (error) {
+            // console.error('Error saving invoice:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+
+    async printReport(htmlContent) {
+        try {
+            const result = await window.electronAPI.printReport(htmlContent);
+            if (result.success) {
+                return { success: true, data: result.data };
+            }
+            throw new Error(result.error);
+        } catch (error) {
+            // console.error('Error saving invoice:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     // Update invoice
     async updateInvoice(invoiceId, updateData) {
         try {

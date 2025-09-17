@@ -1807,6 +1807,120 @@ ipcMain.handle('open-printer-settings', async () => {
     await shell.openExternal('ms-settings:printers');
 });
 
+ipcMain.handle('generate-report-pdf', async (event, htmlContent, options) => {
+    let pdfWindow = null;
+
+    try {
+        // Create hidden window for PDF generation
+        pdfWindow = new BrowserWindow({
+            width: 1200,
+            height: 800,
+            show: false,
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                webSecurity: false
+            }
+        });
+
+        // Load HTML content
+        const dataURL = `data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`;
+        await pdfWindow.loadURL(dataURL);
+
+        // Wait for content to load
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Generate PDF
+        const pdfBuffer = await pdfWindow.webContents.printToPDF({
+            format: 'A4',
+            printBackground: true,
+            landscape: false,
+            marginsType: 0,
+            pageSize: 'A4'
+        });
+
+        // Close window
+        pdfWindow.close();
+        pdfWindow = null;
+
+        // Save PDF file
+        const { dialog } = require('electron');
+        const fs = require('fs');
+        const path = require('path');
+
+        const { filePath, canceled } = await dialog.showSaveDialog({
+            title: 'Save Invoice Report',
+            defaultPath: options.filename || 'Invoice-Report.pdf',
+            filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
+        });
+
+        if (!canceled && filePath) {
+            fs.writeFileSync(filePath, pdfBuffer);
+            return { success: true, path: filePath };
+        }
+
+        return { success: false, error: 'Save cancelled' };
+
+    } catch (error) {
+        if (pdfWindow && !pdfWindow.isDestroyed()) {
+            pdfWindow.close();
+        }
+        return { success: false, error: error.message };
+    }
+});
+
+// Print Report Handler
+ipcMain.handle('print-report', async (event, htmlContent) => {
+    let printWindow = null;
+
+    try {
+        // Create print window
+        printWindow = new BrowserWindow({
+            width: 1200,
+            height: 800,
+            show: false,
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true
+            }
+        });
+
+        // Load HTML content
+        const dataURL = `data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`;
+        await printWindow.loadURL(dataURL);
+
+        // Wait for loading
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Print options
+        const options = {
+            silent: false,
+            printBackground: true,
+            color: false,
+            margin: {
+                marginType: 'minimum'
+            },
+            landscape: false,
+            pagesPerSheet: 1,
+            collate: false,
+            copies: 1,
+            header: 'Invoice Report',
+            footer: 'Page {pageNumber} of {totalPages}'
+        };
+
+        await printWindow.webContents.print(options);
+        printWindow.close();
+
+        return { success: true };
+    } catch (error) {
+        if (printWindow && !printWindow.isDestroyed()) {
+            printWindow.close();
+        }
+        return { success: false, error: error.message };
+    }
+});
+
+
 
 // Improved HTML generation function
 function generateSalesInvoiceHTML(invoiceData, settings) {
@@ -3247,7 +3361,7 @@ function createWindow() {
     });
     // Load app
     // if (process.env.NODE_ENV === 'development') {
-    if (false) {
+    if (true) {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {
