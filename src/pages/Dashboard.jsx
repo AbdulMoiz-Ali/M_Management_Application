@@ -146,10 +146,12 @@ const Dashboard = () => {
       const itemMap = {};
 
       invoice?.items?.forEach((item) => {
-        if (!itemMap[item?.productId]) {
-          itemMap[item?.productId] = 0;
+        if (item?.unit === "MASTER") {
+          if (!itemMap[item?.productId]) {
+            itemMap[item?.productId] = 0;
+          }
+          itemMap[item?.productId] += Number(item?.quantity) || 0;
         }
-        itemMap[item?.productId] += item?.quantity || 0;
       });
 
       Object.entries(itemMap).forEach(([productId, qty]) => {

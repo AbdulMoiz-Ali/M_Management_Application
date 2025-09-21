@@ -2,13 +2,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
     Download, ChevronDown, Calendar, FileText, Printer, X,
-    ArrowLeft, Eye, ChevronLeft, ChevronRight, Filter
+    ArrowLeft, Eye, ChevronLeft, ChevronRight, Filter,
+    AlertCircle,
+    Settings,
+    CheckCircle
 } from 'lucide-react';
 import { useInvoice } from '../hooks/useInvoice';
 import { useAuth } from '../hooks/useAuth';
 
 const InvoiceReportSystem = ({ invoices, onBack }) => {
     const [filterType, setFilterType] = useState('all');
+    const [reportFormat, setReportFormat] = useState('normal');
+    const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -30,6 +35,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
     } = useInvoice();
     const { user } = useAuth();
     const dropdownRef = useRef(null);
+    const formatDropdownRef = useRef(null);
     const showAlert = (message, type = 'success') => {
         setAlert({ show: true, message, type });
         setTimeout(() => setAlert({ show: false, message: '', type: '' }), 3000);
@@ -138,7 +144,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
         martName: "MAKKAH CONFECTIONERY SUKKUR",
     }
     // Generate HTML for report
-    const generateReportHTML = (data) => {
+    const generateNormalReportHTML = (data) => {
         const { filterLabel, pages, totals, generatedDate } = data;
 
         let pagesHTML = pages.map(page => `
@@ -198,7 +204,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                 for (let i = 1; i < invoice.items.length; i++) {
                     invoiceRows += `
                                         <tr class="text-black">
-                                            <td class="text-left items-cell">${invoice.items[i].unit.toLowerCase()}: ${invoice.items[i].quantity}</td>
+                                            <td class="text-left items-cell">${invoice.items[i].unit.toLowerCase() == "half" ? "Dozen" : invoice.items[i].unit.toLowerCase()}: ${invoice.items[i].quantity}</td>
                                         </tr>
                                     `;
                 }
@@ -426,6 +432,276 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
             </html>
         `;
     };
+    const generateShortReportHTML = (data) => {
+        const { filterLabel, pages, totals, generatedDate } = data;
+
+        let pagesHTML = pages.map(page => `
+            <div class="page">
+                <div class="page-header">
+                    <h1>${settings?.martName}</h1>
+                    <h2>Short Sale Sheet - ${filterLabel}</h2>
+                    <div class="report-info">
+                        <span>Generated: ${generatedDate}</span>
+                        <span>Page ${page.pageNumber} of ${pages.length}</span>
+                        <span>Total Records: ${totals.totalInvoices}</span>
+                    </div>
+                </div>
+                
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th class="sr-col">Sr</th>
+                            <th class="date-col">Date</th>
+                            <th class="phone-col">Phone</th>
+                            <th colspan="3" class="qty-header">Sale Qty</th>
+                            <th class="total-col">Total</th>
+                            <th class="status-col">Status</th>
+                        </tr>
+                        <tr class="sub-header">
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th class="qty-col">Master</th>
+                            <th class="qty-col">Dozen</th>
+                            <th class="qty-col">Box</th>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${page.invoices.map((invoice, index) => {
+            const globalIndex = (page.pageNumber - 1) * itemsPerPage + index + 1;
+            const masterQty = invoice.items?.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+            const halfQty = invoice.items?.filter(item => item.unit === 'HALF').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+            const boxQty = invoice.items?.filter(item => item.unit === 'BOX').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+            const totalQty = masterQty + halfQty + boxQty;
+
+            return `
+                                <tr class="text-black">
+                                    <td class="text-center">${globalIndex}</td>
+                                    <td class="text-center">${new Date(invoice.date).toLocaleDateString()}</td>
+                                    <td class="text-center">${invoice.customer?.phone || ''}</td>
+                                    <td class="text-center font-bold">${masterQty || ''}</td>
+                                    <td class="text-center font-bold">${halfQty || ''}</td>
+                                    <td class="text-center font-bold">${boxQty || ''}</td>
+                                    <td class="text-center font-bold">${totalQty}</td>
+                                    <td class="text-center">
+                                        <span class="status-badge status-${invoice.status}">${invoice.status?.toUpperCase() || 'PENDING'}</span>
+                                    </td>
+                                </tr>
+                            `;
+        }).join('')}
+                        
+                        ${page.pageNumber === pages.length ? `
+                            <tr class="total-row text-black">
+                                <td colspan="3" class="text-center font-bold">TOTAL</td>
+                                <td class="text-center font-bold">${pages.flatMap(p => p.invoices).reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}</td>
+                                <td class="text-center font-bold">${pages.flatMap(p => p.invoices).reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'HALF').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}</td>
+                                <td class="text-center font-bold">${pages.flatMap(p => p.invoices).reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'BOX').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}</td>
+                                <td class="text-center font-bold">${pages.flatMap(p => p.invoices).reduce((sum, inv) => {
+            const masterQty = inv.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+            const halfQty = inv.items?.filter(item => item.unit === 'HALF').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+            const boxQty = inv.items?.filter(item => item.unit === 'BOX').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+            return sum + masterQty + halfQty + boxQty;
+        }, 0)}</td>
+                                <td class="text-center font-bold">-</td>
+                            </tr>
+                        ` : ''}
+                    </tbody>
+                </table>
+            </div>
+        `).join('');
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Invoice Report - ${filterLabel}</title>
+                <style>
+                    @media screen {
+                        .page {
+                            background: white;
+                            margin: 0 auto 30px;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            border-radius: 8px;
+                            overflow: hidden;
+                        }
+                    }
+                    
+                    @media print {
+                        body { 
+                            margin: 0; 
+                            padding: 0;
+                            background: white;
+                        }
+                        .page {
+                            margin: 0;
+                            box-shadow: none;
+                            border-radius: 0;
+                        }
+                        .page-break {
+                            page-break-after: always;
+                        }
+                    }
+
+                    .page {
+                        width: 210mm;
+                        min-height: 297mm;
+                        padding: 20mm;
+                        box-sizing: border-box;
+                        position: relative;
+                    }
+                    
+                    .page-header {
+                        text-align: center;
+                        border-bottom: 3px solid #000;
+                        padding-bottom: 15px;
+                        margin-bottom: 20px;
+                    }
+                    
+                    .page-header h1 {
+                        font-size: 24px;
+                        font-weight: bold;
+                        margin: 0 0 5px 0;
+                        letter-spacing: 2px;
+                        color: black;
+                    }
+                    
+                    .page-header h2 {
+                        font-size: 16px;
+                        margin: 0 0 10px 0;
+                        color: #666;
+                    }
+                    
+                    .report-info {
+                        display: flex;
+                        justify-content: space-between;
+                        font-size: 11px;
+                        color: #888;
+                        margin-top: 10px;
+                    }
+                    
+                    .report-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 10px;
+                        margin-bottom: 20px;
+                    }
+                    
+                    .report-table th,
+                    .report-table td {
+                        border: 1px solid #000;
+                        padding: 6px 4px;
+                        vertical-align: middle;
+                    }
+                    
+                    .report-table th {
+                        background-color: #f0f0f0;
+                        font-weight: bold;
+                        text-align: center;
+                    }
+                    
+                    /* Column widths */
+                    .sr-col { width: 5%; }
+                    .invoice-col { width: 12%; }
+                    .date-col { width: 10%; }
+                    .customer-col { width: 15%; }
+                    .phone-col { width: 10%; }
+                    .items-col { width: 20%; }
+                    .qty-col { width: 6%; }
+                    .discount-col { width: 8%; }
+                    .amount-col { width: 10%; }
+                    .status-col { width: 8%; }
+                    th {
+                    color: black;
+                    }
+                    
+                    .text-center { text-align: center; }
+                    .text-left { text-align: left; }
+                    .font-bold { font-weight: bold; }
+                    
+                    .items-cell {
+                        font-size: 9px;
+                        line-height: 1.2;
+                    }
+                    
+                    .status-badge {
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-size: 8px;
+                        font-weight: bold;
+                    }
+                    
+                    .status-paid {
+                        background-color: #d4edda;
+                        color: #155724;
+                    }
+                    
+                    .status-pending {
+                        background-color: #fff3cd;
+                        color: #856404;
+                    }
+                    
+                    .status-overdue {
+                        background-color: #f8d7da;
+                        color: #721c24;
+                    }
+                    
+                    .summary-section {
+                        margin-top: 30px;
+                        border-top: 2px solid #000;
+                        padding-top: 15px;
+                    }
+                    
+                    .summary-section h3 {
+                        text-align: center;
+                        font-size: 16px;
+                        margin-bottom: 15px;
+                    }
+                    
+                    .summary-table {
+                        width: 60%;
+                        margin: 0 auto;
+                        font-size: 12px;
+                    }
+                    
+                    .summary-table td {
+                        padding: 8px 15px;
+                        border: 1px solid #ccc;
+                    }
+                    
+                    .summary-label {
+                        font-weight: bold;
+                        background-color: #f8f9fa;
+                    }
+                    
+                    .summary-value {
+                        text-align: right;
+                        font-weight: bold;
+                    }
+                    
+                    .grand-total {
+                        background-color: #e3f2fd;
+                        color: #1976d2;
+                        font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body>
+                ${pagesHTML}
+            </body>
+            </html>
+        `;
+    };
+    const generateReportHTML = (data) => {
+        if (reportFormat === 'short') {
+            return generateShortReportHTML(data);
+        } else {
+            return generateNormalReportHTML(data);
+        }
+    };
+
 
     // Handle filter change
     const handleFilterChange = (newFilterType) => {
@@ -526,11 +802,25 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
         }
     };
 
+    const reportFormatOptions = [
+        { label: 'Normal Sale Sheet', value: 'normal', description: 'Standard detailed invoice report' },
+        { label: 'Short Sale Sheet', value: 'short', description: 'Simplified summary report' }
+    ];
+
+    const handleFormatChange = (newFormat) => {
+        setReportFormat(newFormat);
+        setIsFormatDropdownOpen(false);
+        setCurrentPage(1);
+    };
+
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setIsDropdownOpen(false);
+            }
+            if (formatDropdownRef.current && !formatDropdownRef.current.contains(event.target)) {
+                setIsFormatDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -542,7 +832,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
             <>
                 {
                     alert.show && (
-                        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-2xl border-l-4 transform transition-all duration-300 ${alert.type === 'success'
+                        <div className={`fixed top-4w right-4 z-50 px-6 py-4 rounded-xl shadow-2xl border-l-4 transform transition-all duration-300 ${alert.type === 'success'
                             ? 'bg-emerald-50 text-emerald-800 border-emerald-500'
                             : alert.type === 'error'
                                 ? 'bg-red-50 text-red-800 border-red-500'
@@ -631,7 +921,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
 
                             {/* Modal Content */}
                             <div className="text-center">
-                                <h3 className="text-xl font-bold mb-4 text-black dark:text-white">Print {type === 'sales' ? 'Sales' : 'Purchase'} Invoice #{invoiceNumber}</h3>
+                                <h3 className="text-xl font-bold mb-4 text-black dark:text-white">Print Report</h3>
 
                                 {isChecking ? (
                                     /* Checking State */
@@ -673,11 +963,11 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                                             </button>
 
                                             <button
-                                                onClick={handleSaveToPDF}
-                                                disabled={isDownloading}
+                                                onClick={handleDownload}
+                                                disabled={isGenerating}
                                                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed"
                                             >
-                                                {isDownloading ? (
+                                                {isGenerating ? (
                                                     <>
                                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                                                         <span className='ml-1'>Saving...</span>
@@ -714,11 +1004,11 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
 
                                         <div className="flex gap-3">
                                             <button
-                                                onClick={handleSaveToPDF}
-                                                disabled={isDownloading}
+                                                onClick={handleDownload}
+                                                disabled={isGenerating}
                                                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed"
                                             >
-                                                {isDownloading ? (
+                                                {isGenerating ? (
                                                     <>
                                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                                                         Saving...
@@ -770,7 +1060,136 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                     </div>
                 )
             }
+            {showModal && (
+                <div className="fixed inset-0 bg-[rgba(0,0,0,0.7)] flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full p-6 relative">
+                        {/* Close Button */}
+                        <button
+                            onClick={() => {
+                                setShowModal(false);
+                                setPrinterStatus(null);
+                            }}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
 
+                        {/* Modal Content */}
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold mb-4 text-black dark:text-white">Print Report</h3>
+
+                            {isChecking ? (
+                                /* Checking State */
+                                <div className="py-8">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                                    <p className="text-gray-600">Checking for available printers...</p>
+                                </div>
+                            ) : printerStatus?.hasPrinters ? (
+                                /* Printer Found */
+                                <div className="py-4">
+                                    <div className="flex items-center justify-center mb-4">
+                                        <CheckCircle className="text-green-500" size={48} />
+                                    </div>
+                                    <h4 className="text-lg font-semibold text-green-700 mb-2">Printer Ready!</h4>
+                                    <p className="text-gray-600 mb-4">
+                                        Default Printer: <span className="font-semibold">{printerStatus.defaultPrinter}</span>
+                                    </p>
+                                    <p className="text-sm text-gray-500 mb-6">
+                                        Found {printerStatus.printers?.length || 1} printer(s) available
+                                    </p>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handlePrint}
+                                            disabled={isPrinting}
+                                            className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed"
+                                        >
+                                            {isPrinting ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                    Printing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Printer size={18} />
+                                                    Print Now
+                                                </>
+                                            )}
+                                        </button>
+
+                                        <button
+                                            onClick={handleDownload}
+                                            disabled={isGenerating}
+                                            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed"
+                                        >
+                                            {isGenerating ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                    <span className='ml-1'>Saving...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Download size={18} />
+                                                    Save PDF
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* No Printer Found */
+                                <div className="py-4">
+                                    <div className="flex items-center justify-center mb-4">
+                                        <AlertCircle className="text-orange-500" size={48} />
+                                    </div>
+                                    <h4 className="text-lg font-semibold text-orange-700 mb-2">No Printer Connected</h4>
+                                    <p className="text-gray-600 mb-4">
+                                        Please connect a printer or choose an alternative option
+                                    </p>
+
+                                    <div className="bg-orange-50 dark:bg-orange-100 border border-orange-200 rounded-lg p-4 mb-6">
+                                        <h5 className="font-semibold text-orange-800 mb-2">Quick Solutions:</h5>
+                                        <ul className="text-sm text-orange-700 text-left space-y-1">
+                                            <li>• Connect a USB printer</li>
+                                            <li>• Install "Microsoft Print to PDF"</li>
+                                            <li>• Add a network printer</li>
+                                            <li>• Use PDF option below</li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handleDownload}
+                                            disabled={isGenerating}
+                                            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                                        >
+                                            {isGenerating ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                    Saving...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Download size={18} />
+                                                    Save as PDF
+                                                </>
+                                            )}
+                                        </button>
+
+                                        <button
+                                            onClick={() => { openPrinterSettings() }}
+                                            className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
+                                        >
+                                            <Settings size={18} />
+                                            Add Printer
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="min-h-screen bg-trasparent p-6 transition-colors duration-300">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
@@ -789,38 +1208,69 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                                 </div>
                             </div>
 
-                            {/* Filter Dropdown */}
-                            <div className="relative" ref={dropdownRef}>
-                                <button
-                                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                    className="flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-                                >
-                                    <Filter className="h-4 w-4 mr-2" />
-                                    {exportOptions.find(opt => opt.value === filterType)?.label}
-                                    <ChevronDown className="h-4 w-4 ml-2" />
-                                </button>
+                            <div className="flex items-center space-x-4">
+                                {/* Report Format Dropdown */}
+                                <div className="relative" ref={formatDropdownRef}>
+                                    <button
+                                        onClick={() => setIsFormatDropdownOpen(!isFormatDropdownOpen)}
+                                        className="flex items-center px-4 py-2 bg-purple-600 dark:bg-purple-700 border border-purple-600 dark:border-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
+                                    >
+                                        <FileText className="h-4 w-4 mr-2" />
+                                        {reportFormatOptions.find(opt => opt.value === reportFormat)?.label}
+                                        <ChevronDown className="h-4 w-4 ml-2" />
+                                    </button>
 
-                                {isDropdownOpen && (
-                                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                                        {exportOptions.map((option) => (
-                                            <button
-                                                key={option.value}
-                                                onClick={() => handleFilterChange(option.value)}
-                                                className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors"
-                                            >
-                                                <option.icon size={16} className="text-blue-600 dark:text-blue-400" />
-                                                <div>
-                                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{option.description}</div>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                                    {isFormatDropdownOpen && (
+                                        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                                            {reportFormatOptions.map((option) => (
+                                                <button
+                                                    key={option.value}
+                                                    onClick={() => handleFormatChange(option.value)}
+                                                    className={`w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-start space-x-3 transition-colors ${reportFormat === option.value ? 'bg-purple-50 dark:bg-purple-900' : ''
+                                                        }`}
+                                                >
+                                                    <div>
+                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">{option.description}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Filter Dropdown */}
+                                <div className="relative" ref={dropdownRef}>
+                                    <button
+                                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                        className="flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                    >
+                                        <Filter className="h-4 w-4 mr-2" />
+                                        {exportOptions.find(opt => opt.value === filterType)?.label}
+                                        <ChevronDown className="h-4 w-4 ml-2" />
+                                    </button>
+
+                                    {isDropdownOpen && (
+                                        <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                                            {exportOptions.map((option) => (
+                                                <button
+                                                    key={option.value}
+                                                    onClick={() => handleFilterChange(option.value)}
+                                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors"
+                                                >
+                                                    <option.icon size={16} className="text-blue-600 dark:text-blue-400" />
+                                                    <div>
+                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">{option.description}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
-
                     {/* Custom Date Range Modal */}
                     {showCustomDate && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -951,6 +1401,13 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                                 <Download className="h-5 w-5 mr-2" />
                                 Download PDF
                             </button>
+                            <button
+                                onClick={handlePrintClick}
+                                className="flex items-center px-6 py-3 bg-purple-600 dark:bg-purple-700 border border-purple-600 dark:border-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
+                            >
+                                <Printer className="h-4 w-4 mr-2" />
+                                Print
+                            </button>
                         </div>
                     </div>
 
@@ -985,46 +1442,124 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                         </div>
 
                         <div className="overflow-x-auto">
-                            <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
-                                <thead>
-                                    <tr className="bg-gray-100 dark:bg-gray-700">
-                                        <th className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">Sr</th>
-                                        <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Invoice No</th>
-                                        <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Date</th>
-                                        <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Customer</th>
-                                        <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Items</th>
-                                        <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Qty</th>
-                                        <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Amount</th>
-                                        <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {paginatedInvoices.map((invoice, index) => {
-                                        const globalIndex = startIndex + index + 1;
-                                        return (
-                                            <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">{globalIndex}</td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.invoiceNumber}</td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.customer?.name}</td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-sm text-gray-700 dark:text-gray-300">
-                                                    {invoice.items?.map(item => `${item.unit}: ${item.quantity}`).join(', ')}
+                            {reportFormat === 'short' && (
+                                // Short Sale Sheet Table
+                                <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
+                                    <thead>
+                                        <tr className="bg-gray-100 dark:bg-gray-700">
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">Sr</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Date</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Phone</th>
+                                            <th colSpan={3} className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Sale Qty</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Qty</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Status</th>
+                                        </tr>
+                                        <tr className="bg-gray-50 dark:bg-gray-600">
+                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Master</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Dozen</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Box</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {paginatedInvoices.map((invoice, index) => {
+                                            const globalIndex = startIndex + index + 1;
+                                            const masterQty = invoice.items?.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                            const halfQty = invoice.items?.filter(item => item.unit === 'HALF').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                            const boxQty = invoice.items?.filter(item => item.unit === 'BOX').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                            const totalQty = masterQty + halfQty + boxQty; // Total quantity calculation
+
+                                            return (
+                                                <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">{globalIndex}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.customer?.phone}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{masterQty || ''}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{halfQty || ''}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{boxQty || ''}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{totalQty}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center">
+                                                        <span className={`px-2 py-1 rounded text-xs ${invoice.status === 'paid' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' :
+                                                            invoice.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300' :
+                                                                'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
+                                                            }`}>
+                                                            {invoice.status?.toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {currentPage === totalPages && (
+                                            <tr className="bg-gray-200 dark:bg-gray-600 font-bold">
+                                                <td colSpan="3" className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">TOTAL</td>
+                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                    {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
                                                 </td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{invoice.totalQuantity}</td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-right font-bold text-gray-900 dark:text-white">{invoice.total}</td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center">
-                                                    <span className={`px-2 py-1 rounded text-xs ${invoice.status === 'paid' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' :
-                                                        invoice.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300' :
-                                                            'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
-                                                        }`}>
-                                                        {invoice.status?.toUpperCase()}
-                                                    </span>
+                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                    {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'HALF').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
                                                 </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                    {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'BOX').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
+                                                </td>
+                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                    {filteredInvoices.reduce((sum, inv) => {
+                                                        const masterQty = inv.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+                                                        const halfQty = inv.items?.filter(item => item.unit === 'HALF').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+                                                        const boxQty = inv.items?.filter(item => item.unit === 'BOX').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+                                                        return sum + masterQty + halfQty + boxQty;
+                                                    }, 0)}
+                                                </td>
+                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">-</td>
+                                            </tr>)}
+                                    </tbody>
+                                </table>
+                            )}
+                            {reportFormat === 'normal' && (
+                                <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
+                                    <thead>
+                                        <tr className="bg-gray-100 dark:bg-gray-700">
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">Sr</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Invoice No</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Date</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Customer</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Items</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Qty</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Amount</th>
+                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {paginatedInvoices.map((invoice, index) => {
+                                            const globalIndex = startIndex + index + 1;
+                                            return (
+                                                <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">{globalIndex}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.invoiceNumber}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.customer?.name}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-sm text-gray-700 dark:text-gray-300">
+                                                        {invoice.items?.map(item => `${item.unit == "half" ? "Dozen" : item.unit}: ${item.quantity}`).join(', ')}
+                                                    </td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{invoice.totalQuantity}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-right font-bold text-gray-900 dark:text-white">{invoice.total}</td>
+                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center">
+                                                        <span className={`px-2 py-1 rounded text-xs ${invoice.status === 'paid' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' :
+                                                            invoice.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300' :
+                                                                'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
+                                                            }`}>
+                                                            {invoice.status?.toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
 
                         {filteredInvoices.length === 0 && (
@@ -1034,7 +1569,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                         )}
                     </div>
                 </div>
-            </div>
+            </div >
         </>
     );
 };
