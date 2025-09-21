@@ -9,8 +9,9 @@ import {
 } from 'lucide-react';
 import { useInvoice } from '../hooks/useInvoice';
 import { useAuth } from '../hooks/useAuth';
+import { usePurchaseInvoice } from '../hooks/usePurchaseInvoice';
 
-const InvoiceReportSystem = ({ invoices, onBack }) => {
+const InvoiceReportSystem = ({ onBack, reportType = 'invoice' }) => {
     const [filterType, setFilterType] = useState('all');
     const [reportFormat, setReportFormat] = useState('normal');
     const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState(false);
@@ -27,12 +28,21 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
     const [isChecking, setIsChecking] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
     const [alert, setAlert] = useState({ show: false, message: '', type: '' });
+    const invoiceHooks = useInvoice();
+    const purchaseHooks = usePurchaseInvoice();
     const {
+        allinvoice,
         printReport,
         generateReportPDF,
         printerCheck,
         openPrinterSettings
     } = useInvoice();
+    const {
+        allPurchaseInvoices,
+    } = usePurchaseInvoice();
+
+    const invoices = reportType === 'purchase' ? (allPurchaseInvoices || {}) : (allinvoice || {});
+
     const { user } = useAuth();
     const dropdownRef = useRef(null);
     const formatDropdownRef = useRef(null);
@@ -43,13 +53,28 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
     const itemsPerPage = 10;
 
     // Filter options
-    const exportOptions = [
-        { label: 'Today', value: 'today', icon: Calendar, description: 'Current day invoices' },
-        { label: 'This Month', value: 'month', icon: Calendar, description: 'Current month invoices' },
-        { label: 'This Year', value: 'year', icon: Calendar, description: 'Current year invoices' },
-        { label: 'Custom Range', value: 'custom', icon: Calendar, description: 'Select date range' },
-        { label: 'All Time', value: 'all', icon: FileText, description: 'All invoices' }
+    const exportOptions = reportType === 'purchase'
+        ? [
+            { label: 'Today', value: 'today', icon: Calendar, description: 'Current day purchases' },
+            { label: 'This Month', value: 'month', icon: Calendar, description: 'Current month purchases' },
+            { label: 'This Year', value: 'year', icon: Calendar, description: 'Current year purchases' },
+            { label: 'Custom Range', value: 'custom', icon: Calendar, description: 'Select date range' },
+            { label: 'All Time', value: 'all', icon: FileText, description: 'All purchases' }
+        ]
+        : [
+            { label: 'Today', value: 'today', icon: Calendar, description: 'Current day invoices' },
+            { label: 'This Month', value: 'month', icon: Calendar, description: 'Current month invoices' },
+            { label: 'This Year', value: 'year', icon: Calendar, description: 'Current year invoices' },
+            { label: 'Custom Range', value: 'custom', icon: Calendar, description: 'Select date range' },
+            { label: 'All Time', value: 'all', icon: FileText, description: 'All invoices' }
+        ];
+
+    // Report format options based on report type
+    const reportFormatOptions = [
+        { label: 'Normal Sale Sheet', value: 'normal', description: 'Standard detailed invoice report' },
+        { label: 'Short Sale Sheet', value: 'short', description: 'Simplified summary report' }
     ];
+
 
     // Filter invoices based on selected filter
     const getFilteredInvoices = (type) => {
@@ -108,12 +133,24 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
 
     // Calculate totals
     const calculateTotals = (invoicesList) => {
-        return {
-            totalInvoices: invoicesList.length,
-            totalAmount: invoicesList.reduce((sum, inv) => sum + (inv.total || 0), 0),
-            totalQuantity: invoicesList.reduce((sum, inv) => sum + (inv.totalQuantity || 0), 0),
-            totalDiscount: invoicesList.reduce((sum, inv) => sum + (inv.discountAmount || 0), 0)
-        };
+        if (reportType === 'purchase') {
+            return {
+                totalRecords: invoicesList.length,
+                totalAmount: invoicesList.reduce((sum, purchase) => sum + (purchase.total || 0), 0),
+                totalQuantity: invoicesList.reduce((sum, purchase) => sum + (purchase.totalQuantity || 0), 0),
+                totalDiscount: invoicesList.reduce((sum, purchase) => sum + (purchase.discountAmount || 0), 0),
+                totalMasterQty: invoicesList.reduce((sum, purchase) => {
+                    return sum + (purchase.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0);
+                }, 0)
+            };
+        } else {
+            return {
+                totalInvoices: invoicesList.length,
+                totalAmount: invoicesList.reduce((sum, inv) => sum + (inv.total || 0), 0),
+                totalQuantity: invoicesList.reduce((sum, inv) => sum + (inv.totalQuantity || 0), 0),
+                totalDiscount: invoicesList.reduce((sum, inv) => sum + (inv.discountAmount || 0), 0)
+            }
+        }
     };
 
     // Generate report data
@@ -136,13 +173,260 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
             totalPages: pages.length,
             pages,
             totals,
-            generatedDate: new Date().toLocaleDateString()
+            generatedDate: new Date().toLocaleDateString(),
+            reportType
         };
     };
 
     const settings = user || {
         martName: "MAKKAH CONFECTIONERY SUKKUR",
     }
+    const generatePurchaseReportHTML = (data) => {
+        const { filterLabel, pages, totals, generatedDate } = data;
+
+        let pagesHTML = pages.map(page => `
+        <div class="page">
+            <div class="page-header">
+                <h1>${settings?.martName}</h1>
+                <h2>Purchase Master Qty Report - ${filterLabel}</h2>
+                <div class="report-info">
+                    <span>Generated: ${generatedDate}</span>
+                    <span>Page ${page.pageNumber} of ${pages.length}</span>
+                    <span>Total Records: ${totals.totalRecords}</span>
+                </div>
+            </div>
+            
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th class="sr-col">Sr</th>
+                        <th class="date-col">Date</th>
+                        <th class="supplier-col">Supplier</th>
+                        <th class="qty-col">Master Qty</th>
+                        <th class="amount-col">Amount</th>
+                        <th class="status-col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${page.invoices.map((purchase, index) => {
+            const globalIndex = (page.pageNumber - 1) * itemsPerPage + index + 1;
+            const masterQty = purchase.items?.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+            return `
+                            <tr class="text-black">
+                                <td class="text-center">${globalIndex}</td>
+                                <td class="text-center">${new Date(purchase.date).toLocaleDateString()}</td>
+                                <td class="text-left">${purchase.supplier?.name || ''}</td>
+                                <td class="text-center font-bold">${masterQty || ''}</td>
+                                <td class="text-center font-bold">${purchase.total || 0}</td>
+                                <td class="text-center">
+                                    <span class="status-badge status-${purchase.status}">${purchase.status?.toUpperCase() || 'PENDING'}</span>
+                                </td>
+                            </tr>
+                        `;
+        }).join('')}
+                    
+                    ${page.pageNumber === pages.length ? `
+                        <tr class="total-row text-black">
+                            <td colspan="4" class="text-center font-bold">TOTAL</td>
+                            <td class="text-center font-bold">${totals.totalMasterQty}</td>
+                            <td class="text-center font-bold">${totals.totalAmount.toFixed(2)}</td>
+                        </tr>
+                    ` : ''}
+                </tbody>
+            </table>
+            
+            ${page.pageNumber === pages.length ? `
+                <div class="summary-section">
+                    <h3 class="text-black">PURCHASE SUMMARY</h3>
+                    <table class="summary-table text-black">
+                        <tr>
+                            <td class="summary-label">Total Purchases:</td>
+                            <td class="summary-value">${totals.totalRecords}</td>
+                            <td class="summary-label">Total Master Qty:</td>
+                            <td class="summary-value">${totals.totalMasterQty}</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label">Total Discount:</td>
+                            <td class="summary-value">${totals.totalDiscount.toFixed(2)}</td>
+                            <td class="summary-label">Total Amount:</td>
+                            <td class="summary-value grand-total">${totals.totalAmount.toFixed(2)}</td>
+                        </tr>
+                    </table>
+                </div>
+            ` : ''}
+        </div>
+        
+        ${page.pageNumber < pages.length ? '<div class="page-break"></div>' : ''}
+    `).join('');
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Purchase Report - ${filterLabel}</title>
+                <style>
+                    @media screen {
+                        .page {
+                            background: white;
+                            margin: 0 auto 30px;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            border-radius: 8px;
+                            overflow: hidden;
+                        }
+                    }
+                    
+                    @media print {
+                        body { 
+                            margin: 0; 
+                            padding: 0;
+                            background: white;
+                        }
+                        .page {
+                            margin: 0;
+                            box-shadow: none;
+                            border-radius: 0;
+                        }
+                        .page-break {
+                            page-break-after: always;
+                        }
+                    }
+
+                    .page {
+                        width: 210mm;
+                        min-height: 297mm;
+                        padding: 20mm;
+                        box-sizing: border-box;
+                        position: relative;
+                    }
+                    
+                    .page-header {
+                        text-align: center;
+                        border-bottom: 3px solid #000;
+                        padding-bottom: 15px;
+                        margin-bottom: 20px;
+                    }
+                    
+                    .page-header h1 {
+                        font-size: 24px;
+                        font-weight: bold;
+                        margin: 0 0 5px 0;
+                        letter-spacing: 2px;
+                        color: black;
+                    }
+                    
+                    .page-header h2 {
+                        font-size: 16px;
+                        margin: 0 0 10px 0;
+                        color: #666;
+                    }
+                    
+                    .report-info {
+                        display: flex;
+                        justify-content: space-between;
+                        font-size: 11px;
+                        color: #888;
+                        margin-top: 10px;
+                    }
+                    
+                    .report-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 10px;
+                        margin-bottom: 20px;
+                    }
+                    
+                    .report-table th,
+                    .report-table td {
+                        border: 1px solid #000;
+                        padding: 6px 4px;
+                        vertical-align: middle;
+                    }
+                    
+                    .report-table th {
+                        background-color: #f0f0f0;
+                        font-weight: bold;
+                        text-align: center;
+                        color: black;
+                    }
+                    
+                    .text-center { text-align: center; }
+                    .text-left { text-align: left; }
+                    .font-bold { font-weight: bold; }
+                    
+                    .items-cell {
+                        font-size: 9px;
+                        line-height: 1.2;
+                    }
+                    
+                    .status-badge {
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-size: 8px;
+                        font-weight: bold;
+                    }
+                    
+                    .status-paid {
+                        background-color: #d4edda;
+                        color: #155724;
+                    }
+                    
+                    .status-pending {
+                        background-color: #fff3cd;
+                        color: #856404;
+                    }
+                    
+                    .status-overdue {
+                        background-color: #f8d7da;
+                        color: #721c24;
+                    }
+                    
+                    .summary-section {
+                        margin-top: 30px;
+                        border-top: 2px solid #000;
+                        padding-top: 15px;
+                    }
+                    
+                    .summary-section h3 {
+                        text-align: center;
+                        font-size: 16px;
+                        margin-bottom: 15px;
+                    }
+                    
+                    .summary-table {
+                        width: 60%;
+                        margin: 0 auto;
+                        font-size: 12px;
+                    }
+                    
+                    .summary-table td {
+                        padding: 8px 15px;
+                        border: 1px solid #ccc;
+                    }
+                    
+                    .summary-label {
+                        font-weight: bold;
+                        background-color: #f8f9fa;
+                    }
+                    
+                    .summary-value {
+                        text-align: right;
+                        font-weight: bold;
+                    }
+                    
+                    .grand-total {
+                        background-color: #e3f2fd;
+                        color: #1976d2;
+                        font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body>
+                ${pagesHTML}
+            </body>
+            </html>
+        `;
+    };
     // Generate HTML for report
     const generateNormalReportHTML = (data) => {
         const { filterLabel, pages, totals, generatedDate } = data;
@@ -201,6 +485,10 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
 
             // Additional rows for remaining items (if more than 1 item)
             if (invoice.items?.length > 1) {
+                const masterQty = invoice.items?.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                const halfQty = invoice.items?.filter(item => item.unit === 'HALF').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                const boxQty = invoice.items?.filter(item => item.unit === 'BOX').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                const data = [masterQty, halfQty, boxQty]
                 for (let i = 1; i < invoice.items.length; i++) {
                     invoiceRows += `
                                         <tr class="text-black">
@@ -694,8 +982,11 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
             </html>
         `;
     };
+
     const generateReportHTML = (data) => {
-        if (reportFormat === 'short') {
+        if (reportType === 'purchase') {
+            return generatePurchaseReportHTML(data);
+        } else if (reportFormat === 'short') {
             return generateShortReportHTML(data);
         } else {
             return generateNormalReportHTML(data);
@@ -737,6 +1028,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
 
     // Download report as PDF
     const handleDownload = async () => {
+        x
         setIsGenerating(true);
         try {
             const data = generateReportData(filterType);
@@ -744,7 +1036,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
 
             // Call electron API to generate PDF
             const result = await generateReportPDF?.(htmlContent, {
-                filename: `Invoice-Report-${data.filterLabel}-${data.generatedDate.replace(/\//g, '-')}.pdf`,
+                filename: `${reportType === 'purchase' ? 'Purchase' : 'Invoice'}-Report-${data.filterLabel}-${data.generatedDate.replace(/\//g, '-')}.pdf`,
                 filterType: data.filterType
             });
 
@@ -802,11 +1094,6 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
         }
     };
 
-    const reportFormatOptions = [
-        { label: 'Normal Sale Sheet', value: 'normal', description: 'Standard detailed invoice report' },
-        { label: 'Short Sale Sheet', value: 'short', description: 'Simplified summary report' }
-    ];
-
     const handleFormatChange = (newFormat) => {
         setReportFormat(newFormat);
         setIsFormatDropdownOpen(false);
@@ -826,6 +1113,7 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
 
     if (showPreview && reportData) {
         return (
@@ -863,9 +1151,9 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                                         <ArrowLeft className="h-5 w-5" />
                                     </button>
                                     <div>
-                                        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Invoice Report Preview</h1>
+                                        <h1 className="text-xl font-bold text-gray-900 dark:text-white"> {reportType === 'purchase' ? 'Purchase' : 'Invoice'} Report Preview</h1>
                                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                                            {reportData.filterLabel} Report • {reportData.totals.totalInvoices} Invoices • {reportData.totalPages} Pages
+                                            {reportData.filterLabel} Report • {reportData.totals.totalRecords} {reportType === 'purchase' ? 'Purchases' : 'Invoices'} • {reportData.totalPages} Pages
                                         </p>
                                     </div>
                                 </div>
@@ -1203,41 +1491,46 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                                     <ArrowLeft className="h-5 w-5" />
                                 </button>
                                 <div>
-                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Invoice Reports</h1>
-                                    <p className="text-gray-600 dark:text-gray-400">Generate and download invoice reports</p>
+                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                        {reportType === 'purchase' ? 'Purchase' : 'Invoice'} Reports
+                                    </h1>
+                                    <p className="text-gray-600 dark:text-gray-400">
+                                        Generate and download {reportType === 'purchase' ? 'purchase' : 'invoice'} reports
+                                    </p>
                                 </div>
                             </div>
 
                             <div className="flex items-center space-x-4">
                                 {/* Report Format Dropdown */}
-                                <div className="relative" ref={formatDropdownRef}>
-                                    <button
-                                        onClick={() => setIsFormatDropdownOpen(!isFormatDropdownOpen)}
-                                        className="flex items-center px-4 py-2 bg-purple-600 dark:bg-purple-700 border border-purple-600 dark:border-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
-                                    >
-                                        <FileText className="h-4 w-4 mr-2" />
-                                        {reportFormatOptions.find(opt => opt.value === reportFormat)?.label}
-                                        <ChevronDown className="h-4 w-4 ml-2" />
-                                    </button>
+                                {reportType != 'purchase' &&
+                                    <div className="relative" ref={formatDropdownRef}>
+                                        <button
+                                            onClick={() => setIsFormatDropdownOpen(!isFormatDropdownOpen)}
+                                            className="flex items-center px-4 py-2 bg-purple-600 dark:bg-purple-700 border border-purple-600 dark:border-purple-700 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
+                                        >
+                                            <FileText className="h-4 w-4 mr-2" />
+                                            {reportFormatOptions.find(opt => opt.value === reportFormat)?.label}
+                                            <ChevronDown className="h-4 w-4 ml-2" />
+                                        </button>
 
-                                    {isFormatDropdownOpen && (
-                                        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                                            {reportFormatOptions.map((option) => (
-                                                <button
-                                                    key={option.value}
-                                                    onClick={() => handleFormatChange(option.value)}
-                                                    className={`w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-start space-x-3 transition-colors ${reportFormat === option.value ? 'bg-purple-50 dark:bg-purple-900' : ''
-                                                        }`}
-                                                >
-                                                    <div>
-                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400">{option.description}</div>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                                        {isFormatDropdownOpen && (
+                                            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                                                {reportFormatOptions.map((option) => (
+                                                    <button
+                                                        key={option.value}
+                                                        onClick={() => handleFormatChange(option.value)}
+                                                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-start space-x-3 transition-colors ${reportFormat === option.value ? 'bg-purple-50 dark:bg-purple-900' : ''
+                                                            }`}
+                                                    >
+                                                        <div>
+                                                            <div className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</div>
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400">{option.description}</div>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>}
 
                                 {/* Filter Dropdown */}
                                 <div className="relative" ref={dropdownRef}>
@@ -1331,49 +1624,95 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                         {(() => {
                             const totals = calculateTotals(filteredInvoices);
-                            return (
-                                <>
-                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400">Total Invoices</p>
-                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalInvoices}</p>
+                            if (reportType === 'purchase') {
+                                return (
+                                    <>
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Purchases</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalRecords}</p>
+                                                </div>
+                                                <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
                                             </div>
-                                            <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
                                         </div>
-                                    </div>
 
-                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400">Total Amount</p>
-                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalAmount.toFixed(2)}</p>
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Amount</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalAmount.toFixed(2)}</p>
+                                                </div>
+                                                <Download className="h-8 w-8 text-green-600 dark:text-green-400" />
                                             </div>
-                                            <Download className="h-8 w-8 text-green-600 dark:text-green-400" />
                                         </div>
-                                    </div>
 
-                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400">Total Quantity</p>
-                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalQuantity}</p>
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">Master Quantity</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalMasterQty}</p>
+                                                </div>
+                                                <Calendar className="h-8 w-8 text-purple-600 dark:text-purple-400" />
                                             </div>
-                                            <Calendar className="h-8 w-8 text-purple-600 dark:text-purple-400" />
                                         </div>
-                                    </div>
 
-                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400">Pages Required</p>
-                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalPages}</p>
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">Pages Required</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalPages}</p>
+                                                </div>
+                                                <Eye className="h-8 w-8 text-orange-600 dark:text-orange-400" />
                                             </div>
-                                            <Eye className="h-8 w-8 text-orange-600 dark:text-orange-400" />
                                         </div>
-                                    </div>
-                                </>
-                            );
+                                    </>
+                                );
+                            } else {
+                                return (
+                                    <>
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Invoices</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalInvoices}</p>
+                                                </div>
+                                                <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Amount</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalAmount.toFixed(2)}</p>
+                                                </div>
+                                                <Download className="h-8 w-8 text-green-600 dark:text-green-400" />
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Quantity</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{totals.totalQuantity}</p>
+                                                </div>
+                                                <Calendar className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400">Pages Required</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalPages}</p>
+                                                </div>
+                                                <Eye className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+                                            </div>
+                                        </div>
+                                    </>
+                                )
+                            };
                         })()}
                     </div>
 
@@ -1442,123 +1781,218 @@ const InvoiceReportSystem = ({ invoices, onBack }) => {
                         </div>
 
                         <div className="overflow-x-auto">
-                            {reportFormat === 'short' && (
-                                // Short Sale Sheet Table
-                                <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
-                                    <thead>
-                                        <tr className="bg-gray-100 dark:bg-gray-700">
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">Sr</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Date</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Phone</th>
-                                            <th colSpan={3} className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Sale Qty</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Qty</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Status</th>
-                                        </tr>
-                                        <tr className="bg-gray-50 dark:bg-gray-600">
-                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Master</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Dozen</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Box</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {paginatedInvoices.map((invoice, index) => {
-                                            const globalIndex = startIndex + index + 1;
-                                            const masterQty = invoice.items?.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
-                                            const halfQty = invoice.items?.filter(item => item.unit === 'HALF').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
-                                            const boxQty = invoice.items?.filter(item => item.unit === 'BOX').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
-                                            const totalQty = masterQty + halfQty + boxQty; // Total quantity calculation
+                            {reportType === 'purchase' ? (
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700 transition-colors">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                            Purchase Preview - Page {currentPage} of {totalPages}
+                                        </h2>
 
-                                            return (
-                                                <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">{globalIndex}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.customer?.phone}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{masterQty || ''}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{halfQty || ''}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{boxQty || ''}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{totalQty}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center">
-                                                        <span className={`px-2 py-1 rounded text-xs ${invoice.status === 'paid' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' :
-                                                            invoice.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300' :
-                                                                'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
-                                                            }`}>
-                                                            {invoice.status?.toUpperCase()}
-                                                        </span>
-                                                    </td>
+                                        {totalPages > 1 && (
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                                    disabled={currentPage === 1}
+                                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                                >
+                                                    <ChevronLeft className="h-4 w-4" />
+                                                </button>
+                                                <span className="px-4 py-2 text-sm text-gray-900 dark:text-white">
+                                                    {currentPage} / {totalPages}
+                                                </span>
+                                                <button
+                                                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                                                    disabled={currentPage === totalPages}
+                                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg disabled:opacity-50 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                                >
+                                                    <ChevronRight className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
+                                            <thead>
+                                                <tr className="bg-gray-100 dark:bg-gray-700">
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">Sr</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Date</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Supplier</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Master Qty</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Amount</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Status</th>
                                                 </tr>
-                                            );
-                                        })}
-                                        {currentPage === totalPages && (
-                                            <tr className="bg-gray-200 dark:bg-gray-600 font-bold">
-                                                <td colSpan="3" className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">TOTAL</td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
-                                                    {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
-                                                </td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
-                                                    {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'HALF').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
-                                                </td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
-                                                    {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'BOX').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
-                                                </td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
-                                                    {filteredInvoices.reduce((sum, inv) => {
-                                                        const masterQty = inv.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
-                                                        const halfQty = inv.items?.filter(item => item.unit === 'HALF').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
-                                                        const boxQty = inv.items?.filter(item => item.unit === 'BOX').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
-                                                        return sum + masterQty + halfQty + boxQty;
-                                                    }, 0)}
-                                                </td>
-                                                <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">-</td>
-                                            </tr>)}
-                                    </tbody>
-                                </table>
-                            )}
-                            {reportFormat === 'normal' && (
-                                <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
-                                    <thead>
-                                        <tr className="bg-gray-100 dark:bg-gray-700">
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">Sr</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Invoice No</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Date</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Customer</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Items</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Qty</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Amount</th>
-                                            <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {paginatedInvoices.map((invoice, index) => {
-                                            const globalIndex = startIndex + index + 1;
-                                            return (
-                                                <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">{globalIndex}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.invoiceNumber}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.customer?.name}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-sm text-gray-700 dark:text-gray-300">
-                                                        {invoice.items?.map(item => `${item.unit == "half" ? "Dozen" : item.unit}: ${item.quantity}`).join(', ')}
-                                                    </td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{invoice.totalQuantity}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-right font-bold text-gray-900 dark:text-white">{invoice.total}</td>
-                                                    <td className="border border-gray-300 dark:border-gray-600 p-2 text-center">
-                                                        <span className={`px-2 py-1 rounded text-xs ${invoice.status === 'paid' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' :
-                                                            invoice.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300' :
-                                                                'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
-                                                            }`}>
-                                                            {invoice.status?.toUpperCase()}
-                                                        </span>
-                                                    </td>
+                                            </thead>
+                                            <tbody>
+                                                {paginatedInvoices.map((purchase, index) => {
+                                                    const globalIndex = startIndex + index + 1;
+                                                    const masterQty = purchase.items?.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                                    return (
+                                                        <tr key={purchase.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">{globalIndex}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{new Date(purchase.date).toLocaleDateString()}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{purchase.supplier?.name || ''}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{masterQty || ''}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-right font-bold text-gray-900 dark:text-white">{purchase.total || 0}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center">
+                                                                <span className={`px-2 py-1 rounded text-xs ${purchase.status === 'paid' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' :
+                                                                    purchase.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300' :
+                                                                        'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
+                                                                    }`}>
+                                                                    {purchase.status?.toUpperCase() || 'PENDING'}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                {currentPage === totalPages && (
+                                                    <tr className="bg-gray-200 dark:bg-gray-600 font-bold">
+                                                        <td colSpan="4" className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">TOTAL</td>
+                                                        <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                            {filteredInvoices.reduce((sum, purchase) => {
+                                                                const masterQty = purchase.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+                                                                return sum + masterQty;
+                                                            }, 0)}
+                                                        </td>
+                                                        <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                            {filteredInvoices.reduce((sum, purchase) => sum + (purchase.total || 0), 0).toFixed(2)}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {filteredInvoices.length === 0 && (
+                                        <div className="text-center py-8">
+                                            <p className="text-gray-500 dark:text-gray-400">No purchases found for the selected filter.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <>
+                                    {reportFormat === 'short' && (
+                                        // Short Sale Sheet Table
+                                        <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
+                                            <thead>
+                                                <tr className="bg-gray-100 dark:bg-gray-700">
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">Sr</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Date</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Phone</th>
+                                                    <th colSpan={3} className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Sale Qty</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Qty</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Status</th>
                                                 </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                                <tr className="bg-gray-50 dark:bg-gray-600">
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Master</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Dozen</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-1 text-xs text-gray-900 dark:text-white">Box</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-1"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paginatedInvoices.map((invoice, index) => {
+                                                    const globalIndex = startIndex + index + 1;
+                                                    const masterQty = invoice.items?.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                                    const halfQty = invoice.items?.filter(item => item.unit === 'HALF').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                                    const boxQty = invoice.items?.filter(item => item.unit === 'BOX').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                                    const totalQty = masterQty + halfQty + boxQty; // Total quantity calculation
+
+                                                    return (
+                                                        <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">{globalIndex}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.customer?.phone}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{masterQty || ''}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{halfQty || ''}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{boxQty || ''}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{totalQty}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center">
+                                                                <span className={`px-2 py-1 rounded text-xs ${invoice.status === 'paid' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' :
+                                                                    invoice.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300' :
+                                                                        'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
+                                                                    }`}>
+                                                                    {invoice.status?.toUpperCase()}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                {currentPage === totalPages && (
+                                                    <tr className="bg-gray-200 dark:bg-gray-600 font-bold">
+                                                        <td colSpan="3" className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">TOTAL</td>
+                                                        <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                            {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
+                                                        </td>
+                                                        <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                            {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'HALF').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
+                                                        </td>
+                                                        <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                            {filteredInvoices.reduce((sum, inv) => sum + (inv.items?.filter(item => item.unit === 'BOX').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0), 0)}
+                                                        </td>
+                                                        <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">
+                                                            {filteredInvoices.reduce((sum, inv) => {
+                                                                const masterQty = inv.items?.filter(item => item.unit === 'MASTER').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+                                                                const halfQty = inv.items?.filter(item => item.unit === 'HALF').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+                                                                const boxQty = inv.items?.filter(item => item.unit === 'BOX').reduce((s, item) => s + Number(item.quantity || 0), 0) || 0;
+                                                                return sum + masterQty + halfQty + boxQty;
+                                                            }, 0)}
+                                                        </td>
+                                                        <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">-</td>
+                                                    </tr>)}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                    {reportFormat === 'normal' && (
+                                        <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
+                                            <thead>
+                                                <tr className="bg-gray-100 dark:bg-gray-700">
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">Sr</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Invoice No</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Date</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Customer</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Items</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Qty</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Amount</th>
+                                                    <th className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paginatedInvoices.map((invoice, index) => {
+                                                    const globalIndex = startIndex + index + 1;
+                                                    const masterQty = invoice.items?.filter(item => item.unit === 'MASTER').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                                    const halfQty = invoice.items?.filter(item => item.unit === 'HALF').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                                    const boxQty = invoice.items?.filter(item => item.unit === 'BOX').reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+                                                    return (
+                                                        <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center text-gray-900 dark:text-white">{globalIndex}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.invoiceNumber}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{new Date(invoice.date).toLocaleDateString()}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white">{invoice.customer?.name}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-sm text-gray-700 dark:text-gray-300">
+                                                                MASTER: {masterQty}, BOX: {boxQty}, Dozen: {halfQty}
+                                                            </td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center font-bold text-gray-900 dark:text-white">{invoice.totalQuantity}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-right font-bold text-gray-900 dark:text-white">{invoice.total}</td>
+                                                            <td className="border border-gray-300 dark:border-gray-600 p-2 text-center">
+                                                                <span className={`px-2 py-1 rounded text-xs ${invoice.status === 'paid' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' :
+                                                                    invoice.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300' :
+                                                                        'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
+                                                                    }`}>
+                                                                    {invoice.status?.toUpperCase()}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </>
                             )}
                         </div>
 

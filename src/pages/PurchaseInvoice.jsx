@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import Pagination from '../components/Pagination';
 import LoadingDemo from '../components/LoadingDemo';
 import useConfirmDialog from '../components/ConfirmationDialog';
+import InvoiceReportSystem from '../components/InvoiceReportSystem';
 
 const PurchaseInvoice = () => {
     const { products, updateProductStock } = useProduct();
@@ -538,6 +539,15 @@ const PurchaseInvoice = () => {
         }
     };
 
+    if (currentView === 'reports') {
+        return (
+            <InvoiceReportSystem
+                onBack={() => setCurrentView('dashboard')}
+                reportType="purchase"
+            />
+        );
+    }
+
     // Show loading state
     if (loading) {
         return (
@@ -596,6 +606,7 @@ const PurchaseInvoice = () => {
                             </div>
                             <div className='flex gap-2 items-center'>
                                 <button
+                                    onClick={() => setCurrentView('reports')}
                                     className="flex items-center px-4 py-2 bg-white/80 dark:bg-gray-700/80 backdrop-blur text-green-600 dark:text-green-400 hover:text-white hover:bg-green-600 dark:hover:bg-green-600 border border-gray-200 dark:border-gray-600 rounded-xl hover:shadow-md transition-all duration-200"
                                 >
                                     <Download size={18} className="mr-2" />

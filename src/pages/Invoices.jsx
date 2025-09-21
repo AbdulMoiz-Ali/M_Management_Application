@@ -75,6 +75,7 @@ const InvoiceManagement = () => {
     const [statusFilter, setStatusFilter] = useState('all');
     const [isEditing, setIsEditing] = useState(false);
     const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+    const [usedStock, setUsedStock] = useState({});
     // Invoice creation states
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [showProductDropdown, setShowProductDropdown] = useState({});
@@ -189,6 +190,11 @@ const InvoiceManagement = () => {
     };
 
     const selectProduct = (product, index) => {
+        const availableStock = getAvailableStock(product.id);
+        if (availableStock <= 0) {
+            showAlert(`${product?.name} is out of stock! No units available.`, 'error');
+            return;
+        }
         setValue(`items.${index}.productSearch`, product?.name);
         setValue(`items.${index}.productName`, product?.name);
         setValue(`items.${index}.productId`, product?.id);
@@ -207,6 +213,7 @@ const InvoiceManagement = () => {
 
         calculateAmount(index);
         setShowProductDropdown({ ...showProductDropdown, [index]: false });
+        showAlert(`${product?.name} - Available Stock: ${Math.floor(availableStock)} MASTER units`, 'info');
     };
 
     const selectCustomer = (customer) => {
@@ -225,6 +232,56 @@ const InvoiceManagement = () => {
         setFilteredCustomers([]);
     };
 
+    const getAvailableStock = (productId) => {
+        const product = products?.find(p => p.id === productId);
+        if (!product) return 0;
+
+        const used = usedStock[productId] || 0;
+        return Math.max(0, product.stock - used);
+    };
+
+    const calculateUsedQuantityForProduct = (productId, excludeIndex = -1) => {
+        const items = getValues("items") || [];
+        let totalUsed = 0;
+
+        items.forEach((item, index) => {
+            if (index !== excludeIndex && selectedProduct[index]?.id === productId) {
+                const quantity = parseFloat(item.quantity) || 0;
+                const unit = item.unit || 'MASTER';
+
+                // Convert all quantities to MASTER equivalent
+                if (unit === 'MASTER') {
+                    totalUsed += quantity;
+                }
+            }
+        });
+
+        return totalUsed;
+    };
+
+    const updateUsedStock = () => {
+        const items = getValues("items") || [];
+        const newUsedStock = {};
+
+        items.forEach((item, index) => {
+            const selectedProductForItem = selectedProduct[index];
+            if (selectedProductForItem?.id) {
+                const quantity = parseFloat(item.quantity) || 0;
+                const unit = item.unit || 'MASTER';
+                let masterUnits = 0;
+
+                // Convert to master units
+                if (unit === 'MASTER') {
+                    masterUnits = quantity;
+                }
+
+                newUsedStock[selectedProductForItem.id] = (newUsedStock[selectedProductForItem.id] || 0) + masterUnits;
+            }
+        });
+
+        setUsedStock(newUsedStock);
+    };
+
     const calculateAmount = (index) => {
         const items = getValues("items");
         const quantity = items?.[index]?.quantity || 0;
@@ -233,10 +290,17 @@ const InvoiceManagement = () => {
         // Get the selected product for this item
         const selectedProductForItem = selectedProduct?.[index];
         if (selectedProductForItem) {
+            const alreadyUsed = calculateUsedQuantityForProduct(selectedProductForItem.id, index);
+            const availableStock = Math.max(0, selectedProductForItem.stock - alreadyUsed);
+
             let rate = 0;
+            let maxAllowedQuantity = 0;
+            let requestedMasterUnits = 0;
 
             if (unit === 'MASTER') {
                 rate = selectedProductForItem?.pricePerMaster;
+                requestedMasterUnits = quantity;
+                maxAllowedQuantity = availableStock;
             } else if (unit === 'BOX') {
                 rate = selectedProductForItem?.pricePerBox;
             } else if (unit === 'HALF') {
@@ -249,9 +313,28 @@ const InvoiceManagement = () => {
                 rate = selectedProductForItem?.pricePerDozen;
             }
 
-            setValue(`items.${index}.rate`, rate);
-            const amount = quantity * rate;
-            setValue(`items.${index}.amount`, amount);
+            // Check if requested quantity exceeds available stock
+            if (requestedMasterUnits > availableStock) {
+                const maxQuantity = Math.floor(maxAllowedQuantity);
+                showAlert(
+                    `Stock insufficient! Available: ${maxQuantity} ${unit}(s) for ${selectedProductForItem?.name}. (${Math.floor(availableStock)} MASTER left)`,
+                    'error'
+                );
+                setValue(`items.${index}.quantity`, maxQuantity);
+                const amount = maxQuantity * rate;
+                setValue(`items.${index}.amount`, amount);
+            } else {
+                setValue(`items.${index}.rate`, rate);
+                const amount = quantity * rate;
+                setValue(`items.${index}.amount`, amount);
+            }
+
+            // Update used stock tracking
+            updateUsedStock();
+
+            // setValue(`items.${index}.rate`, rate);
+            // const amount = quantity * rate;
+            // setValue(`items.${index}.amount`, amount);
         } else {
             // Manual calculation if no product selected
             const rate = items?.[index]?.rate || 0;
@@ -697,7 +780,6 @@ const InvoiceManagement = () => {
     if (showReports) {
         return (
             <InvoiceReportSystem
-                invoices={allinvoice}
                 onBack={() => setShowReports(false)}
             />
         );
@@ -1224,18 +1306,41 @@ const InvoiceManagement = () => {
                                                         />
                                                         {showProductDropdown?.[index] && filteredProducts?.length > 0 && (
                                                             <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
-                                                                {filteredProducts?.map((product) => (
-                                                                    <div
-                                                                        key={product?.id}
-                                                                        onClick={() => selectProduct(product, index)}
-                                                                        className="px-2 py-1 hover:bg-gray-100 cursor-pointer border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-sm last:border-b-0"
-                                                                    >
-                                                                        <div className="font-medium text-gray-900 dark:text-gray-200">{product?.name}</div>
-                                                                        <div className="text-xs text-gray-600 dark:text-gray-200/50">
-                                                                            Master: {product?.pricePerMaster} | Box: {product?.pricePerBox} | Dozen: {product?.pricePerDozen}
+                                                                {filteredProducts?.map((product) => {
+                                                                    const availableStock = getAvailableStock(product.id);
+                                                                    const isOutOfStock = availableStock <= 0;
+
+                                                                    return (
+                                                                        <div
+                                                                            key={product?.id}
+                                                                            onClick={() => !isOutOfStock && selectProduct(product, index)}
+                                                                            className={`px-2 py-1 border-b border-gray-100 dark:border-gray-700 text-sm last:border-b-0 ${isOutOfStock
+                                                                                ? 'opacity-50 cursor-not-allowed bg-red-50 dark:bg-red-900/20'
+                                                                                : 'hover:bg-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                                                                }`}
+                                                                        >
+                                                                            <div className="flex justify-between items-center">
+                                                                                <div className="font-medium text-gray-900 dark:text-gray-200">
+                                                                                    {product?.name}
+                                                                                    {isOutOfStock && <span className="text-red-600 ml-2">(Out of Stock)</span>}
+                                                                                </div>
+                                                                                <div className={`text-xs px-2 py-1 rounded-full ${availableStock > 10 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                                                                    availableStock > 0 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                                                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                                                    }`}>
+                                                                                    Available: {Math.floor(availableStock)}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-xs text-gray-600 dark:text-gray-200/50">
+                                                                                Master: {product?.pricePerMaster} | Box: {product?.pricePerBox} | Dozen: {product?.pricePerDozen}
+                                                                                <br />
+                                                                                <span className="text-orange-600">
+                                                                                    Used in invoice: {Math.floor(usedStock[product.id] || 0)} MASTER
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                ))}
+                                                                    );
+                                                                })}
                                                             </div>
                                                         )}
                                                     </div>
